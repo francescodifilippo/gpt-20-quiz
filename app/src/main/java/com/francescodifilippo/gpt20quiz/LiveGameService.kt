@@ -202,17 +202,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         effort: ReasoningEffort
     ): AiTurn {
         check(session.role == PlayerRole.RESPONDER)
-        val instructions = """
-            You are playing Twenty Questions as the GUESSER. The human has a secret
-            object, living thing, person, place, fictional character or concept.
-            Deduce the secret from the full answer history. Never pretend to know
-            the secret. Ask a single high-information YES/NO question per turn,
-            with no duplicate or redundant questions. Handle uncertainty in answers.
-            On the last turn you MUST issue a final guess. You may guess earlier.
-            Only return a JSON object: {"kind":"question","text":"..."} or
-            {"kind":"guess","text":"..."}. Nothing else. Text must be in the
-            selected language. A guess must identify one concrete candidate.
-        """.trimIndent() + "\n\n" + GameLanguagePrompt.initialInstructions(session)
+        val instructions = TwentyQuestionsStrategy.aiGuesser +
+            "\n\n" + GameLanguagePrompt.initialInstructions(session)
         val historyArray = JSONArray()
         history.forEach {
             historyArray.put(JSONObject().put("question", it.question)
@@ -241,14 +232,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         model: String, session: GameSessionState, effort: ReasoningEffort
     ): String {
         check(session.role == PlayerRole.GUESSER)
-        val instructions = """
-            Choose one widely recognizable and specific secret for a Twenty
-            Questions guessing game. Avoid abstract impossibilities, aliases,
-            extremely obscure entries or ambiguous group names.
-            Return only JSON: {"secret":"..."}.
-            The secret must be the canonical name, suitable for the specified
-            language. No hints, no explanations, no surrounding text.
-        """.trimIndent() + "\n\n" + GameLanguagePrompt.initialInstructions(session)
+        val instructions = TwentyQuestionsStrategy.chooseAiSecret +
+            "\n\n" + GameLanguagePrompt.initialInstructions(session)
         val result = completion(model, instructions, JSONObject()
             .put("action", "choose_secret")
             .put("language", session.language.effectiveLanguageTag), effort)
@@ -266,15 +251,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         effort: ReasoningEffort
     ): String {
         check(session.role == PlayerRole.GUESSER)
-        val instructions = """
-            You are the ANSWERER in Twenty Questions. Your hidden secret is
-            provided in the structured input. Never reveal it before the end.
-            Answer the human's latest yes/no question truthfully based on that
-            secret and prior context. Choose exactly one of:
-            yes, no, probably, probably_not, unknown.
-            Return only JSON, e.g. {"answer":"yes"}.
-            Do not add commentary or hints.
-        """.trimIndent() + "\n\n" + GameLanguagePrompt.initialInstructions(session)
+        val instructions = TwentyQuestionsStrategy.answerHumanQuestion +
+            "\n\n" + GameLanguagePrompt.initialInstructions(session)
         val previous = JSONArray()
         history.forEach {
             previous.put(JSONObject().put("question", it.question).put("answer", it.answer))
@@ -299,13 +277,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         effort: ReasoningEffort
     ): Boolean {
         check(session.role == PlayerRole.GUESSER)
-        val instructions = """
-            Judge whether the human's final guess semantically identifies
-            the same specific secret. Accept obvious aliases and spelling
-            variants in the chosen language, but reject broader categories
-            or different entities. Only return JSON {"correct":true}
-            or {"correct":false}. Do not reveal the secret.
-        """.trimIndent() + "\n\n" + GameLanguagePrompt.initialInstructions(session)
+        val instructions = TwentyQuestionsStrategy.verifyHumanGuess +
+            "\n\n" + GameLanguagePrompt.initialInstructions(session)
         val result = completion(model, instructions, JSONObject()
             .put("secret", secret).put("guess", guess), effort)
         check(result.has("correct") && result.get("correct") is Boolean)
