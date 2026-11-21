@@ -40,7 +40,6 @@ object GameLanguages {
         LanguageOption("et", "Eesti", "Estone", "Estonian"),
         LanguageOption("fi", "Suomi", "Finlandese", "Finnish"),
         LanguageOption("fr", "Français", "Francese", "French"),
-        LanguageOption("de", "Deutsch", "Tedesco", "German"),
         LanguageOption("el", "Ελληνικά", "Greco", "Greek"),
         LanguageOption("en", "English", "Inglese", "English"),
         LanguageOption("ga", "Gaeilge", "Irlandese", "Irish"),
@@ -56,6 +55,7 @@ object GameLanguages {
         LanguageOption("sl", "Slovenščina", "Sloveno", "Slovenian"),
         LanguageOption("es", "Español", "Spagnolo", "Spanish"),
         LanguageOption("sv", "Svenska", "Svedese", "Swedish"),
+        LanguageOption("de", "Deutsch", "Tedesco", "German"),
         LanguageOption("hu", "Magyar", "Ungherese", "Hungarian")
     )
 
