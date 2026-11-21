@@ -210,6 +210,9 @@ class SiwcAuthManager(context: Context) {
                 .appendQueryParameter("code_challenge_method", "S256")
                 .appendQueryParameter("code_challenge", challenge)
                 .apply {
+                    // Explicit re-consent is required if identity sign-in succeeded but plan usage was declined.
+                    if (previous != null && !previous.canUsePlan)
+                        appendQueryParameter("prompt", "consent")
                     if (initial) appendQueryParameter("agent_name_hint", "GPT 20 Quiz")
                     else if (previous!!.idToken.isNotBlank())
                         appendQueryParameter("id_token_hint", previous.idToken)
