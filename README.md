@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.5).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
+> **Status: SIWC-enabled Android beta (0.2.6).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
 
 ## Concept
 
@@ -40,6 +40,37 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Beta 0.2.6 — streaming model catalog (512K response truncation fix)
+
+Two real Android screenshots showed an HTTP 200 response identified as JSON,
+but model discovery failed. An older UI version also rendered an extremely
+long response body containing unrelated agent metadata. A code review found a
+specific client defect: **GET /v1/models was read into a 512K-character buffer
+and discarded its remaining bytes**, making a valid larger JSON document
+unparseable. The diagnostic line on the phone also omitted response length
+because the recorded count exceeded that earlier reporting threshold.
+
+The 0.2.6 client instead uses a bounded, **incremental JSON reader** (Gson
+`JsonReader`) against the HTTP stream. It only retains `models[]` entries
+with `visibility == "list"`, `slug` and `display_name`; unknown fields
+(including potentially long metadata) are skipped without displaying,
+logging, persisting or processing them as instructions. HTTP and token
+handling remain unchanged.
+
+- A synthetic **>512K** response with lengthy unrelated JSON fields and a
+  valid `models` array now passes its JVM regression test.
+- Truncated JSON and responses without a `models` array are still rejected.
+- A hard safety bound of 16 million decoded characters remains, with a
+  distinct `MODELS_TOO_LARGE` diagnostic and no raw response content.
+- No model names or available models are invented. Only actual
+  account-visible models returned by SIWC may enable Start Game.
+
+The prior screens are evidence of failure at catalog parsing, **not proof that
+SIWC model discovery is now working on the device**. Re-test version 0.2.6:
+press **Aggiorna modelli** and verify the account-visible list appears, then
+test a real inference request. Never upload raw model catalog bodies or
+OAuth tokens as diagnostics.
 
 ## Beta 0.2.5 — model-response format inspection
 
