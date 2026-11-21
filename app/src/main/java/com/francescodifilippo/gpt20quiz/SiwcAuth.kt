@@ -2,6 +2,7 @@ package com.francescodifilippo.gpt20quiz
 
 import android.content.Context
 import android.content.Intent
+import androidx.browser.customtabs.CustomTabsIntent
 import android.net.Uri
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -12,6 +13,7 @@ import java.math.BigInteger
 import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
@@ -174,8 +176,34 @@ private class EncryptedSessionStore(context: Context) {
 class SiwcAuthManager(context: Context) {
     private val app = context.applicationContext
     private val store = EncryptedSessionStore(app)
+    @Volatile private var awaitingCallback: Pair<Int, String>? = null
 
     fun sessionOrNull(): SiwcSession? = store.load()
+
+    /**
+     * Secure recovery if browser loopback routing fails. A callback URL copied
+     * from the browser is accepted ONLY while this process has a pending
+     * authorization transaction, with an exact matching port, path and state.
+     *
+     * The URL/code is not saved, logged, or sent to any diagnostics service.
+     */
+    suspend fun submitManualCallback(raw: String) = withContext(Dispatchers.IO) {
+        val pending = awaitingCallback
+            ?: throw IllegalStateException("There is no active ChatGPT sign-in")
+        val target = SiwcCallbackUrl.localRequestTarget(raw, pending.first, pending.second)
+        Socket(InetAddress.getByName("127.0.0.1"), pending.first).use { socket ->
+            socket.soTimeout = 5000
+            val request = "GET " + target + " HTTP/1.1\r\n" +
+                "Host: 127.0.0.1:" + pending.first +
+                "\r\nConnection: close\r\n\r\n"
+            socket.getOutputStream().write(request.toByteArray(StandardCharsets.US_ASCII))
+            socket.getOutputStream().flush()
+            val reply = socket.getInputStream().bufferedReader().readLine().orEmpty()
+            check(reply.startsWith("HTTP/1.1 200 ")) {
+                "Callback rejected by the active sign-in listener"
+            }
+        }
+    }
 
     /**
      * Opens the device's external browser. Callback comes to a one-use loopback
@@ -194,7 +222,7 @@ class SiwcAuthManager(context: Context) {
             Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
 
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
-            server.soTimeout = 180_000
+            server.soTimeout = 150_000
             val redirect = "http://127.0.0.1:" + server.localPort + SiwcEndpoints.callbackPath
             val clientId = if (initial) "dynamic_agent_client" else previous!!.clientId
             val url = Uri.parse(SiwcEndpoints.authorize).buildUpon()
@@ -217,9 +245,17 @@ class SiwcAuthManager(context: Context) {
                     else if (previous!!.idToken.isNotBlank())
                         appendQueryParameter("id_token_hint", previous.idToken)
                 }.build()
-            val intent = Intent(Intent.ACTION_VIEW, url)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            app.startActivity(intent)
+            // Keep the process hosting our loopback listener alive while the
+            // authorization browser is in the foreground.
+            awaitingCallback = Pair(server.localPort, state)
+            try {
+                SiwcCallbackService.start(app)
+                val tab = CustomTabsIntent.Builder()
+                    .setShowTitle(true)
+                    .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
+                    .build()
+                tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                tab.launchUrl(app, url)
 
             val callback = server.accept().use { socket ->
                 socket.soTimeout = 15000
@@ -298,6 +334,10 @@ class SiwcAuthManager(context: Context) {
             )
             store.save(session)
             session
+            } finally {
+                awaitingCallback = null
+                SiwcCallbackService.stop(app)
+            }
         }
     }
 
