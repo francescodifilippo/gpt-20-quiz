@@ -4,15 +4,27 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: native Android UI demo in source control.** Kotlin/Jetpack Compose screens, independent role scores and scripted offline gameplay are implemented. CI is configured to build an APK; CI results have not yet been verified. SIWC authentication and AI inference are not implemented. No real-AI gameplay claims are made.
+> **Status: SIWC-enabled Android beta (0.2.0).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but end-to-end SIWC authorization and model inference are NOT YET VERIFIED ON A PHYSICAL ANDROID DEVICE. Do not treat this as a production-ready release.
 
 ## Concept
 
 Think of a person, animal, object, place, or concept. An AI game host tries to guess it by asking up to 20 questions. Respond with **Yes / No / Probably / Probably not / Don't know**. Each question should reduce uncertainty using the full answer history. The app uses the device's preferred language, supports language selection, and delegates game text to the model for languages without a bundled translation.
 
-## Android UI demo (November 2026)
+## SIWC live beta — entry point
 
-The repository includes an interactive **Compose UI prototype** in [MainActivity.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/MainActivity.kt):
+The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/RealQuizApp.kt), not the older offline mock. It will not enable **Start game** until the user grants ChatGPT plan usage and selects a model from the account's own `/v1/models` catalog.
+
+- [SiwcAuth.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/SiwcAuth.kt) starts official OAuth Authorization Code + PKCE via the system browser and a device-local 127.0.0.1 callback, verifies OpenAI's RS256 OIDC signature and claims, stores tokens encrypted through Android Keystore, and refreshes/disconnects the session.
+- [LiveGameService.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/LiveGameService.kt) uses the user's authorized bearer token for `POST https://api.openai.com/v1/responses`, with `store:false`, `stream:true`, explicit game context and terminal event checks. Two distinct role prompts drive the game; no mock answers appear in the actual app entry point.
+- The game keeps the **large 20-question countdown**, separate local scores by role and its language selector (Latin, Esperanto, Automatic/default, then 24 EU official languages).
+- Build variant **0.2.0-siwc-beta** is a debug app; obtain its APK from the `gpt-20-quiz-siwc-beta-debug` artifact in the latest successful [GitHub Actions](../../actions) run.
+
+**Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
+
+**Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Legacy UI demo (not launched)
+The repository retains an earlier, no-longer-launched **Compose UI prototype** in [MainActivity.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/MainActivity.kt):
 
 - Dark neon theme with gradient hero and luminous accents.
 - A very large **20 → 0** question countdown at the top of every game turn, plus a 20-segment progress indicator.
@@ -32,9 +44,7 @@ language name, role and turn budget from `GameSessionState`. See
 [language catalog](app/src/main/java/com/francescodifilippo/gpt20quiz/GameLanguage.kt),
 [language selector UI](app/src/main/java/com/francescodifilippo/gpt20quiz/LanguagePicker.kt)
 and [language rules tests](app/src/test/java/com/francescodifilippo/gpt20quiz/GameLanguageTest.kt).
-**The current offline demo does not produce model-generated text in those 26
-languages**; the choice takes effect in the context contract for the
-upcoming SIWC inference integration.
+**The old demo does not generate any text with AI**. The new SIWC beta will request the chosen language from the authenticated model.
 
 **Demo scoring:** Guesser wins earn `100 + (unused turns × 10)`; Responder wins earn `100 + (survived turns × 10)`. Losses earn 0. Totals and wins are stored separately for each role using local `SharedPreferences`. Because demo mode has no real opponent, demo scores are not competitive or verified.
 
