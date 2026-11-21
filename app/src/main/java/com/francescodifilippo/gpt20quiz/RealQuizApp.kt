@@ -55,6 +55,12 @@ fun RealQuizApp() {
     var session by remember { mutableStateOf(auth.sessionOrNull()) }
     var modelList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var selectedModel by remember { mutableStateOf("") }
+    var selectedEffort by remember {
+        mutableStateOf(ReasoningEffort.fromPreference(prefs.getString("reasoning_effort", "auto")))
+    }
+    // Match-level snapshot: changing model or home preferences cannot alter
+    // the reasoning effort during an ongoing game.
+    var activeEffort by remember { mutableStateOf(ReasoningEffort.AUTO) }
     var modelLoadState by remember { mutableStateOf("idle") } // idle/loading/ready/empty/error
     var modelLoadError by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -165,7 +171,9 @@ fun RealQuizApp() {
             busy = true
             message = ""
             try {
-                val result = ai.nextAiQuestion(selectedModel, turnState(), history.toList())
+                val result = ai.nextAiQuestion(
+                    selectedModel, turnState(), history.toList(), activeEffort
+                )
                 questionKind = result.kind
                 currentQuestion = result.text
             } catch (e: Exception) {
@@ -179,6 +187,7 @@ fun RealQuizApp() {
     fun startGame() {
         if (session?.canUsePlan != true || busy || selectedModel.isBlank()) return
         activeLanguage = GameLanguages.resolve(selectedGameLanguage, deviceLocale)
+        activeEffort = selectedEffort
         remaining = GameRules.MAX_TURNS
         history.clear()
         secret = ""
@@ -194,7 +203,7 @@ fun RealQuizApp() {
             scope.launch {
                 busy = true
                 try {
-                    secret = ai.selectSecret(selectedModel, turnState())
+                    secret = ai.selectSecret(selectedModel, turnState(), activeEffort)
                 } catch (e: Exception) {
                     message = e.message ?: "Could not start game"
                     currentPage = GamePhase.HOME
@@ -386,6 +395,14 @@ fun RealQuizApp() {
                                 }
                             }
                         }
+                        ReasoningEffortSelector(
+                            selected = selectedEffort,
+                            italian = italian,
+                            onSelect = { choice ->
+                                selectedEffort = choice
+                                prefs.edit().putString("reasoning_effort", choice.apiValue).apply()
+                            }
+                        )
                         GameLanguageTile(italian, selectedGameLanguage, deviceLocale) {
                             if (!busy) showLanguages = true
                         }
@@ -417,8 +434,11 @@ fun RealQuizApp() {
                     GamePhase.PLAYING -> {
                         Countdown(remaining, role, italian)
                         GameLanguageIndicator(activeLanguage, italian)
-                        Text("MODEL · " + selectedModel,
-                            color = turquoise, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "MODEL · " + selectedModel +
+                                "   |   EFFORT · " + activeEffort.apiValue,
+                            color = turquoise, fontSize = 11.sp, fontWeight = FontWeight.Bold
+                        )
                         if (role == PlayerRole.RESPONDER) {
                             if (questionKind.isBlank() && !busy) {
                                 MainButton(
@@ -505,7 +525,7 @@ fun RealQuizApp() {
                                             try {
                                                 val code = ai.answerHumanQuestion(
                                                     selectedModel, turnState(), secret,
-                                                    history.toList(), question
+                                                    history.toList(), question, activeEffort
                                                 )
                                                 history.add(GameExchange(question, code))
                                                 remaining = GameRules.consumeTurn(remaining)
@@ -532,7 +552,8 @@ fun RealQuizApp() {
                                         busy = true; message = ""
                                         try {
                                             val correct = ai.verifyHumanGuess(
-                                                selectedModel, turnState(), secret, guess
+                                                selectedModel, turnState(), secret, guess,
+                                                activeEffort
                                             )
                                             finish(correct)
                                         } catch (e: Exception) {
