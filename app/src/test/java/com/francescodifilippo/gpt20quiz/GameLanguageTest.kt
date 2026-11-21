@@ -53,7 +53,7 @@ class GameLanguageTest {
         assertFalse(GameLanguages.option("la").matches("English"))
     }
 
-    @Test fun languageAndRoleAreIncludedInPrompt() {
+    @Test fun languagePromptIsOneSentenceWithResolvedLanguage() {
         val session = GameSessionState(
             role = PlayerRole.RESPONDER,
             language = GameLanguages.resolve("eo", "it-IT"),
@@ -61,12 +61,13 @@ class GameLanguageTest {
             questionsRemaining = 19
         )
         val instructions = GameLanguagePrompt.initialInstructions(session)
-        assertTrue(instructions.contains("Language choice: eo"))
-        assertTrue(instructions.contains("Effective language code: eo"))
-        assertTrue(instructions.contains("Effective language name: Esperanto"))
-        assertTrue(instructions.contains("RESPONDER"))
-        assertTrue(instructions.contains("Next turn: 2"))
-        assertTrue(instructions.contains("Turns remaining: 19"))
+        assertTrue(instructions.contains("Use Esperanto (eo)"))
+        assertTrue(instructions.contains("JSON field names and answer codes unchanged"))
+        assertEquals(1, instructions.count { it == '.' })
+        // Model role and remaining turns are already passed via structured
+        // input; don't repeat them in the language directive.
+        assertFalse(instructions.contains("RESPONDER"))
+        assertFalse(instructions.contains("Turns remaining"))
     }
 
     @Test fun frozenAutomaticSessionIsNotChangedByLaterDeviceLocale() {
