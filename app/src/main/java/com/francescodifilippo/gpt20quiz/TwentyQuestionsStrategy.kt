@@ -21,6 +21,9 @@ object TwentyQuestionsStrategy {
         object type is sufficient for a branded example; a vague supercategory
         is not. For a unique person, place, or character, identify the entity.
         An identity proposal is always kind="guess", not kind="question".
+        A wrong guess costs one turn and the game CONTINUES if turns remain.
+        History entries with kind="guess" and answer="no" are rejected
+        identities: do not repeat them. A correct guess ends the game.
         On turn 20 you MUST guess, even if uncertain.
 
         Return only a JSON object with "kind" equal to "question" or "guess"
