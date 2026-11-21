@@ -5,7 +5,11 @@ plugins {
 
 android {
     namespace = "com.francescodifilippo.gpt20quiz"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 0
+        }
+    }
 
     defaultConfig {
         applicationId = "com.francescodifilippo.gpt20quiz"
