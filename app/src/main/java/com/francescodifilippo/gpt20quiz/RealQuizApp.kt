@@ -55,6 +55,8 @@ fun RealQuizApp() {
     var selectedModel by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    // Never persist an OAuth callback URL: it contains a one-use authorization code.
+    var manualCallbackUrl by remember { mutableStateOf("") }
     var currentPage by remember { mutableStateOf(GamePhase.HOME) }
     var activeLanguage by remember { mutableStateOf(GameLanguages.resolve("auto", deviceLocale)) }
     var remaining by remember { mutableIntStateOf(20) }
@@ -248,6 +250,68 @@ fun RealQuizApp() {
                                 }
                             }
                         )
+                        if (busy && session == null) {
+                            Surface(
+                                shape = RoundedCornerShape(19.dp),
+                                color = Color(0xFF202842),
+                                border = BorderStroke(1.dp, turquoise.copy(alpha = .55f))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(17.dp),
+                                    verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                                    Text(
+                                        if (italian) "CHROME NON RAGGIUNGE 127.0.0.1?"
+                                        else "CHROME CANNOT REACH 127.0.0.1?",
+                                        color = turquoise, fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        if (italian)
+                                            "Se il browser va in timeout dopo il consenso, copia l'indirizzo COMPLETO dalla barra di Chrome, torna qui e incollalo. Il codice rimane sul telefono."
+                                        else
+                                            "If the browser times out after consent, copy the FULL URL from Chrome's address bar, return here and paste it. The code remains on your phone.",
+                                        color = bright, fontSize = 12.sp, lineHeight = 18.sp
+                                    )
+                                    OutlinedTextField(
+                                        value = manualCallbackUrl,
+                                        onValueChange = { manualCallbackUrl = it.take(8192) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        maxLines = 3,
+                                        label = {
+                                            Text(
+                                                if (italian) "URL di ritorno (privato)"
+                                                else "Callback URL (private)"
+                                            )
+                                        },
+                                        visualTransformation =
+                                            androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                    )
+                                    MainButton(
+                                        if (italian) "COMPLETA ACCESSO CON URL"
+                                        else "COMPLETE SIGN-IN WITH URL",
+                                        enabled = manualCallbackUrl.isNotBlank()
+                                    ) {
+                                        val pasted = manualCallbackUrl
+                                        manualCallbackUrl = ""
+                                        scope.launch {
+                                            try {
+                                                auth.submitManualCallback(pasted)
+                                                message = if (italian)
+                                                    "Callback ricevuto. Verifico l'accesso..."
+                                                else "Callback received. Verifying sign-in..."
+                                            } catch (e: Exception) {
+                                                message = e.message ?: "Invalid callback"
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        if (italian)
+                                            "Per sicurezza incolla l'URL soltanto qui, mai in chat o nei log."
+                                        else "For your security, paste this URL only here, never in chat or logs.",
+                                        color = dim, fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
                         if (session?.canUsePlan == true) {
                             if (modelList.isEmpty() && !busy) {
                                 MainButton(
