@@ -41,6 +41,28 @@ Versioned prompt: [twenty_questions_v1.md](../prompts/twenty_questions_v1.md). T
 
 Use the Android locale as initial BCP 47 language tag. Player may override it. Bundle reliable UI translations for selected locales; use English fallback for unsupported static UI strings until translations are available. AI-generated question text follows the player's language. Avoid claiming every possible language is guaranteed by every model.
 
+### Game language selection (implemented in UI demo)
+
+The independent **game language** picker lists Latin and Esperanto first,
+then Automatic (Android device language), then the 24 official EU languages.
+`auto` is the initial preference even though it is displayed third.
+The catalog is in `GameLanguage.kt` and the searchable Compose screen is
+in `LanguagePicker.kt`.
+
+- Store `game_language_code` in local `SharedPreferences`, default `auto`.
+- On `startGame`, resolve `auto` to the Android device's **full** BCP 47
+  locale, or use the chosen language code.
+- Freeze `activeGameLanguageCode` and `activeGameLanguageTag` for the
+  current match. The player can change the preference on the Home screen
+  before the next game, but the active session remains unchanged.
+- `GameSessionState` stores `GameLanguageSelection`, role and turn
+  counters. `GameLanguagePrompt.initialInstructions(state)` generates
+  per-turn model instructions with the actual language, role and counters.
+- UI chrome stays Italian/English for now; the AI will generate game text
+  in the chosen language once SIWC integration is enabled.
+- Language names and translation quality require validation on all
+  supported locales; Latin and Esperanto are experimental too.
+
 ## Security
 
 - Android app-scoped secure storage of OAuth token set; no shared server-side token store.
