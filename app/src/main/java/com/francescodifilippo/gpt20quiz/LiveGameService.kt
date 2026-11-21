@@ -38,8 +38,17 @@ class LiveGameService(private val auth: SiwcAuthManager) {
                 for (i in 0 until records.length()) {
                     val model = records.optJSONObject(i) ?: continue
                     if (model.optString("visibility") != "list") continue
-                    val slug = model.optString("slug")
-                    if (slug.isNotBlank()) add(Pair(slug, model.optString("display_name", slug)))
+                    val slug = model.optString("slug").trim()
+                    // Model names come from the account catalog, not freeform
+                    // user text. Limit UI labels and never render entire server
+                    // responses, JSON or unexpected multiline content.
+                    if (slug.isBlank() || slug.length > 120 ||
+                        slug.any { it.isWhitespace() || it.isISOControl() }) continue
+                    val label = model.optString("display_name", slug)
+                        .replace(Regex("[\\p{Cntrl}]+"), " ").trim()
+                        .take(72)
+                        .ifBlank { slug }
+                    add(Pair(slug, label))
                 }
             }
         } finally { connection.disconnect() }
