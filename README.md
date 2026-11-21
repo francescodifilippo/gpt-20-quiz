@@ -21,6 +21,21 @@ The repository includes an interactive **Compose UI prototype** in [MainActivity
 - Italian/English static UI toggle (English fallback for other locales until translated). Model-generated arbitrary-language dialog is upcoming SIWC work.
 - **Explicit demo mode**: scripted questions, deterministic mock replies, and self-reported guess success. The UI does not yet communicate with an AI.
 
+**Game-language picker (implemented):** The Home screen includes a
+searchable language selection screen with **Latin, Esperanto, Automatic**
+as the first three entries, then the 24 official EU languages. **Automatic
+(`auto`) is the default**, irrespective of its position in the list.
+The selection persists in Android preferences and is resolved and frozen
+when each match starts. The UI language (Italian/English) is independent.
+The future SIWC prompt adapter receives the chosen effective BCP 47 tag,
+language name, role and turn budget from `GameSessionState`. See
+[language catalog](app/src/main/java/com/francescodifilippo/gpt20quiz/GameLanguage.kt),
+[language selector UI](app/src/main/java/com/francescodifilippo/gpt20quiz/LanguagePicker.kt)
+and [language rules tests](app/src/test/java/com/francescodifilippo/gpt20quiz/GameLanguageTest.kt).
+**The current offline demo does not produce model-generated text in those 26
+languages**; the choice takes effect in the context contract for the
+upcoming SIWC inference integration.
+
 **Demo scoring:** Guesser wins earn `100 + (unused turns × 10)`; Responder wins earn `100 + (survived turns × 10)`. Losses earn 0. Totals and wins are stored separately for each role using local `SharedPreferences`. Because demo mode has no real opponent, demo scores are not competitive or verified.
 
 **Build:** Open the project in Android Studio with JDK 17, Gradle 9.6 / AGP 9.4 and Android SDK 37 installed, or run `./gradlew :app:testDebugUnitTest :app:assembleDebug`. A GitHub Actions workflow performs this build on commits to main; successful builds upload a debug APK artifact. This is an unsigned-for-distribution **debug** build, not a Play Store release.
