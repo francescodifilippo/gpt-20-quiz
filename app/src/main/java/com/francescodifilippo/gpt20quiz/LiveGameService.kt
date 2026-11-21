@@ -32,6 +32,10 @@ class LiveGameService(private val auth: SiwcAuthManager) {
                     connectTimeout = 15_000
                     readTimeout = 35_000
                     setRequestProperty("Accept", "application/json")
+                    // Android may automatically negotiate gzip. Explicit
+                    // identity makes the response bytes unambiguous here:
+                    // a diagnostic response cannot be a compressed stream.
+                    setRequestProperty("Accept-Encoding", "identity")
                     setRequestProperty("Authorization", "Bearer " + accessToken)
                     // Only the server catalog is used to populate the model selector.
                     instanceFollowRedirects = false
@@ -48,8 +52,16 @@ class LiveGameService(private val auth: SiwcAuthManager) {
             val body = try {
                 val stream = if (status in 200..299)
                     connection.inputStream else connection.errorStream
-                stream?.bufferedReader(StandardCharsets.UTF_8)?.use {
-                    it.readText().take(512_000)
+                stream?.bufferedReader(StandardCharsets.UTF_8)?.use { reader ->
+                    // Bound memory even if a proxy replies with a huge HTML page.
+                    val buffer = CharArray(8192)
+                    val output = StringBuilder()
+                    while (output.length <= ModelCatalogPayload.MAX_RESPONSE_CHARACTERS) {
+                        val next = reader.read(buffer)
+                        if (next < 0) break
+                        output.append(buffer, 0, next)
+                    }
+                    output.toString()
                 }.orEmpty()
             } catch (e: java.io.IOException) {
                 throw ModelCatalogFailure(ModelCatalogStage.CONNECTION, cause = e)
@@ -70,13 +82,45 @@ class LiveGameService(private val auth: SiwcAuthManager) {
                     providerErrorCode = code
                 )
             }
+            val summary = ModelCatalogPayload.fingerprint(body, connection.contentType)
+            val providerRequestId = connection.getHeaderField("x-request-id")
+            // The SIWC endpoint must return a JSON object containing models[].
+            // Byte-order marks and leading whitespace can be safely removed.
+            // Never attempt to turn HTML/SSE into an invented model catalog.
+            val normalizedBody = ModelCatalogPayload.normalize(body)
+            if (normalizedBody.isBlank() || !normalizedBody.startsWith("{") ||
+                body.length > ModelCatalogPayload.MAX_RESPONSE_CHARACTERS) {
+                throw ModelCatalogFailure(
+                    ModelCatalogStage.JSON_RESPONSE,
+                    httpStatus = status,
+                    contentTypeCategory = summary.contentType,
+                    bodyCategory = summary.kind,
+                    responseCharacters = summary.characters,
+                    requestId = providerRequestId
+                )
+            }
             val root = try {
-                JSONObject(body)
+                JSONObject(normalizedBody)
             } catch (e: Exception) {
-                throw ModelCatalogFailure(ModelCatalogStage.JSON_RESPONSE, cause = e)
+                throw ModelCatalogFailure(
+                    ModelCatalogStage.JSON_RESPONSE,
+                    httpStatus = status,
+                    contentTypeCategory = summary.contentType,
+                    bodyCategory = summary.kind,
+                    responseCharacters = summary.characters,
+                    requestId = providerRequestId,
+                    cause = e
+                )
             }
             val records = root.optJSONArray("models")
-                ?: throw ModelCatalogFailure(ModelCatalogStage.MODEL_SELECTION)
+                ?: throw ModelCatalogFailure(
+                    ModelCatalogStage.MODEL_SELECTION,
+                    httpStatus = status,
+                    contentTypeCategory = summary.contentType,
+                    bodyCategory = summary.kind,
+                    responseCharacters = summary.characters,
+                    requestId = providerRequestId
+                )
             buildList {
                 for (i in 0 until records.length()) {
                     val model = records.optJSONObject(i) ?: continue
