@@ -65,6 +65,7 @@ fun RealQuizApp() {
     var modelLoadError by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var effortNeedsRevision by remember { mutableStateOf(false) }
     // Never persist an OAuth callback URL: it contains a one-use authorization code.
     var manualCallbackUrl by remember { mutableStateOf("") }
     var currentPage by remember { mutableStateOf(GamePhase.HOME) }
@@ -166,6 +167,16 @@ fun RealQuizApp() {
         }
     }
 
+    fun reportGameError(error: Exception) {
+        val rejected = error as? SiwcInferenceFailure
+        effortNeedsRevision = rejected?.mayBeEffortRelated == true
+        message = if (rejected != null) {
+            rejected.displayMessage(italian, selectedModel)
+        } else {
+            safeUserFacingError(error, italian)
+        }
+    }
+
     fun nextAiTurn() {
         scope.launch {
             busy = true
@@ -177,7 +188,7 @@ fun RealQuizApp() {
                 questionKind = result.kind
                 currentQuestion = result.text
             } catch (e: Exception) {
-                message = e.message ?: "AI request failed"
+                reportGameError(e)
                 questionKind = ""
                 currentQuestion = ""
             } finally { busy = false }
@@ -188,6 +199,7 @@ fun RealQuizApp() {
         if (session?.canUsePlan != true || busy || selectedModel.isBlank()) return
         activeLanguage = GameLanguages.resolve(selectedGameLanguage, deviceLocale)
         activeEffort = selectedEffort
+        effortNeedsRevision = false
         remaining = GameRules.MAX_TURNS
         history.clear()
         secret = ""
@@ -205,7 +217,7 @@ fun RealQuizApp() {
                 try {
                     secret = ai.selectSecret(selectedModel, turnState(), activeEffort)
                 } catch (e: Exception) {
-                    message = e.message ?: "Could not start game"
+                    reportGameError(e)
                     currentPage = GamePhase.HOME
                 } finally { busy = false }
             }
@@ -439,6 +451,27 @@ fun RealQuizApp() {
                                 "   |   EFFORT · " + activeEffort.apiValue,
                             color = turquoise, fontSize = 11.sp, fontWeight = FontWeight.Bold
                         )
+                        if (effortNeedsRevision && !busy) {
+                            Text(
+                                if (italian)
+                                    "Modifica l'effort e riprova: la partita mantiene il turno corrente."
+                                else
+                                    "Choose a different effort, then retry. The current turn is preserved.",
+                                color = turquoise, fontSize = 13.sp
+                            )
+                            ReasoningEffortSelector(
+                                selected = activeEffort,
+                                italian = italian,
+                                onSelect = { choice ->
+                                    // Explicit user choice: never silently downgrade.
+                                    activeEffort = choice
+                                    selectedEffort = choice
+                                    prefs.edit().putString("reasoning_effort", choice.apiValue).apply()
+                                    effortNeedsRevision = false
+                                    message = ""
+                                }
+                            )
+                        }
                         if (role == PlayerRole.RESPONDER) {
                             if (questionKind.isBlank() && !busy) {
                                 MainButton(
@@ -538,7 +571,7 @@ fun RealQuizApp() {
                                                 }
                                                 input = ""
                                             } catch (e: Exception) {
-                                                message = e.message ?: "AI request failed"
+                                                reportGameError(e)
                                             } finally { busy = false }
                                         }
                                     }
@@ -557,7 +590,7 @@ fun RealQuizApp() {
                                             )
                                             finish(correct)
                                         } catch (e: Exception) {
-                                            message = e.message ?: "Could not verify guess"
+                                            reportGameError(e)
                                         } finally { busy = false }
                                     }
                                 }
