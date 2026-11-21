@@ -88,7 +88,10 @@ signed version.
 
 After that one-time migration, subsequent updates install over the app
 without clearing its data, provided the package ID, signing key, and
-alias stay unchanged and versionCode increases for each build.
+alias stay unchanged. On GitHub Actions, versionCode is automatically
+set to 10000 + GITHUB_RUN_NUMBER (monotonically increasing per workflow).
+Local developer builds retain the base versionCode 5 and should not be
+used for updates over newer CI builds.
 
 GitHub Actions verifies the APK signature and prints the **public signing
 certificate SHA-256 fingerprint**. Record it once and compare against
