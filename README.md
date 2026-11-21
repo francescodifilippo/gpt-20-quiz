@@ -41,6 +41,32 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
 
+## Beta 0.2.4 — traceable SIWC model-catalog failures
+
+On the Android device, SIWC sign-in completed, but the account model picker
+reported only a generic failure. The local screenshot cannot identify whether
+this is a token, network, HTTP, or response-format error.
+
+The Android app now classifies every **GET /v1/models** failure by stage:
+
+- **MODELS_TOKEN:** OAuth access token unavailable or refresh failed.
+- **MODELS_NETWORK:** connection, timeout, DNS, or TLS failure to api.openai.com.
+- **MODELS_HTTP_NNN:** concrete HTTP status (401, 403, 429, 5xx, etc.) with
+  an optional, strictly validated short provider error code.
+- **MODELS_BAD_RESPONSE:** HTTP success with invalid JSON.
+- **MODELS_BAD_CATALOG:** valid JSON but no SIWC `models` array.
+- **MODELS_UNEXPECTED:** unexpected error, with no raw exception text shown.
+
+The stage is shown in the **Modelli disponibili** panel, next to **Aggiorna modelli**.
+No access token, raw provider body, authorization code, or complete prompt
+is shown, logged, or persisted. The pure diagnostics layer is covered by
+dedicated tests. The provider's live result on the device remains to be
+measured; compilation alone cannot identify the cause.
+
+Official contract: [SIWC models and inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference).
+The app continues to require a real account-scoped visible model, rather
+than pretending that an inferred/hard-coded model is available.
+
 ## Beta 0.2.2 — model selector, language navigation, bounded messages
 
 Following a successful Android SIWC sign-in test, beta 0.2.2 addresses user-reported UX issues:
