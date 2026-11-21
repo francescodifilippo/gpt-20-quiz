@@ -49,7 +49,7 @@ android {
         versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
             ?.takeIf { it > 0 && it < 1_000_000 }
             ?.let { 10000 + it }) ?: 5
-        versionName = "0.2.3-stable-signing"
+        versionName = "0.2.4-model-diagnostics"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
