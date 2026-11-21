@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.2).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
+> **Status: SIWC-enabled Android beta (0.2.5).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
 
 ## Concept
 
@@ -40,6 +40,29 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Beta 0.2.5 — model-response format inspection
+
+The reported device error is **MODELS_BAD_RESPONSE** after SIWC sign-in.
+This means the app saw an HTTP 2xx response but could not parse a JSON
+object from its body. Official SIWC documentation and OpenAI's reference
+client both expect an object with a `models` array, so the shape was
+not replaced with speculative alternatives.
+
+Beta 0.2.5 removes a possible leading UTF-8 BOM, requests
+`Accept-Encoding: identity` to simplify Android HTTP body handling,
+and limits the size of downloaded response text. If the body is still
+invalid, the app displays only safe metadata:
+
+- HTTP status (e.g. 200)
+- Allowlisted Content-Type category (json, html, text, event-stream, ...)
+- Safe body format category (empty, html, json-array, json-object, ...)
+- Response length and sanitized request ID when available.
+
+No raw body, OAuth token, authorization code or prompt is collected or
+displayed. A successful CI build does not identify the actual
+response format sent to this specific phone: the next device test must
+read the new safe diagnostic line.
 
 ## Beta 0.2.4 — traceable SIWC model-catalog failures
 
