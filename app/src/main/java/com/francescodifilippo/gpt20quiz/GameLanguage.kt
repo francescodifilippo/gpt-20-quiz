@@ -90,19 +90,10 @@ data class GameSessionState(
     }
 }
 
+/** A single language directive; state/turns stay in the JSON game payload. */
 object GameLanguagePrompt {
-    /** Include these instructions with the versioned Twenty Questions system rules. */
-    fun initialInstructions(state: GameSessionState): String = """
-        GAME LANGUAGE POLICY
-        Language choice: ${state.language.preferenceCode}
-        Effective language code: ${state.language.effectiveLanguageTag}
-        Effective language name: ${state.language.effectiveLanguageName}
-        Use the effective language for every question, guess and explanation.
-        Do not switch languages during the match. Preserve canonical answer codes
-        and the structured response schema; only player-facing text is translated.
-        Treat the selected language as fixed even if the device locale changes.
-        The player's role is ${state.role.name}.
-        Next turn: ${state.questionNumber}
-        Turns remaining: ${state.questionsRemaining}
-    """.trimIndent()
+    fun initialInstructions(state: GameSessionState): String =
+        "Use ${state.language.effectiveLanguageName} " +
+        "(${state.language.effectiveLanguageTag}) for all player-facing game text; " +
+        "keep JSON field names and answer codes unchanged."
 }
