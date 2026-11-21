@@ -18,8 +18,6 @@ data class AiTurn(val kind: String, val text: String)
  */
 class LiveGameService(private val auth: SiwcAuthManager) {
     suspend fun availableModels(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
-        // Distinguish failure obtaining a usable OAuth token from failure at
-        // the actual GET /v1/models request. Never expose token values.
         val accessToken = try {
             auth.accessToken()
         } catch (e: Exception) {
@@ -32,12 +30,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
                     connectTimeout = 15_000
                     readTimeout = 35_000
                     setRequestProperty("Accept", "application/json")
-                    // Android may automatically negotiate gzip. Explicit
-                    // identity makes the response bytes unambiguous here:
-                    // a diagnostic response cannot be a compressed stream.
                     setRequestProperty("Accept-Encoding", "identity")
                     setRequestProperty("Authorization", "Bearer " + accessToken)
-                    // Only the server catalog is used to populate the model selector.
                     instanceFollowRedirects = false
                 }
         } catch (e: Exception) {
@@ -49,91 +43,60 @@ class LiveGameService(private val auth: SiwcAuthManager) {
             } catch (e: java.io.IOException) {
                 throw ModelCatalogFailure(ModelCatalogStage.CONNECTION, cause = e)
             }
-            val body = try {
-                val stream = if (status in 200..299)
-                    connection.inputStream else connection.errorStream
-                stream?.bufferedReader(StandardCharsets.UTF_8)?.use { reader ->
-                    // Bound memory even if a proxy replies with a huge HTML page.
-                    val buffer = CharArray(8192)
-                    val output = StringBuilder()
-                    while (output.length <= ModelCatalogPayload.MAX_RESPONSE_CHARACTERS) {
-                        val next = reader.read(buffer)
-                        if (next < 0) break
-                        output.append(buffer, 0, next)
-                    }
-                    output.toString()
-                }.orEmpty()
-            } catch (e: java.io.IOException) {
-                throw ModelCatalogFailure(ModelCatalogStage.CONNECTION, cause = e)
-            }
             if (status !in 200..299) {
-                // Extract ONLY a short provider error code from the error JSON.
-                // The provider message and response body are never displayed.
-                val code = runCatching {
-                    val root = JSONObject(body)
-                    val nested = root.optJSONObject("error")
-                    nested?.optString("code")?.takeIf { it.isNotBlank() }
-                        ?: nested?.optString("type")
-                        ?: root.optString("code")
-                }.getOrNull()
+                // Non-success bodies are bounded and only a safe provider code
+                // is extracted; never display raw HTTP responses.
+                val code = try {
+                    val reader = connection.errorStream
+                        ?.bufferedReader(StandardCharsets.UTF_8)
+                    reader?.use {
+                        val buffer = CharArray(4096)
+                        val size = it.read(buffer)
+                        if (size > 0) {
+                            val root = JSONObject(String(buffer, 0, size))
+                            val err = root.optJSONObject("error")
+                            err?.optString("code")?.takeIf(String::isNotBlank)
+                                ?: err?.optString("type")
+                        } else null
+                    }
+                } catch (_: Exception) { null }
                 throw ModelCatalogFailure(
                     ModelCatalogStage.HTTP,
                     httpStatus = status,
                     providerErrorCode = code
                 )
             }
-            val summary = ModelCatalogPayload.fingerprint(body, connection.contentType)
-            val providerRequestId = connection.getHeaderField("x-request-id")
-            // The SIWC endpoint must return a JSON object containing models[].
-            // Byte-order marks and leading whitespace can be safely removed.
-            // Never attempt to turn HTML/SSE into an invented model catalog.
-            val normalizedBody = ModelCatalogPayload.normalize(body)
-            if (normalizedBody.isBlank() || !normalizedBody.startsWith("{") ||
-                body.length > ModelCatalogPayload.MAX_RESPONSE_CHARACTERS) {
+            // Stream the full root object. Unknown fields (including lengthy
+            // agent metadata) are skipped; no full response body is built or
+            // persisted in memory, logs or UI. The earlier 512 KiB truncation
+            // produced a false MODELS_BAD_RESPONSE for large valid JSON.
+            val contentCategory =
+                ModelCatalogPayload.fingerprint("", connection.contentType).contentType
+            val requestId = connection.getHeaderField("x-request-id")
+            try {
+                connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use {
+                    ModelCatalogStreamParser.parse(it)
+                }
+            } catch (e: ModelCatalogStreamParser.Failure) {
+                val stage = when (e.problem) {
+                    ModelCatalogStreamParser.Problem.MALFORMED_JSON ->
+                        ModelCatalogStage.JSON_RESPONSE
+                    ModelCatalogStreamParser.Problem.MISSING_MODELS ->
+                        ModelCatalogStage.MODEL_SELECTION
+                    ModelCatalogStreamParser.Problem.TOO_LARGE ->
+                        ModelCatalogStage.TOO_LARGE
+                }
                 throw ModelCatalogFailure(
-                    ModelCatalogStage.JSON_RESPONSE,
+                    stage = stage,
                     httpStatus = status,
-                    contentTypeCategory = summary.contentType,
-                    bodyCategory = summary.kind,
-                    responseCharacters = summary.characters,
-                    requestId = providerRequestId
-                )
-            }
-            val root = try {
-                JSONObject(normalizedBody)
-            } catch (e: Exception) {
-                throw ModelCatalogFailure(
-                    ModelCatalogStage.JSON_RESPONSE,
-                    httpStatus = status,
-                    contentTypeCategory = summary.contentType,
-                    bodyCategory = summary.kind,
-                    responseCharacters = summary.characters,
-                    requestId = providerRequestId,
+                    contentTypeCategory = contentCategory,
+                    bodyCategory = e.bodyCategory,
+                    responseCharacters = e.charactersRead,
+                    requestId = requestId,
                     cause = e
                 )
-            }
-            val records = root.optJSONArray("models")
-                ?: throw ModelCatalogFailure(
-                    ModelCatalogStage.MODEL_SELECTION,
-                    httpStatus = status,
-                    contentTypeCategory = summary.contentType,
-                    bodyCategory = summary.kind,
-                    responseCharacters = summary.characters,
-                    requestId = providerRequestId
-                )
-            buildList {
-                for (i in 0 until records.length()) {
-                    val model = records.optJSONObject(i) ?: continue
-                    if (model.optString("visibility") != "list") continue
-                    val slug = model.optString("slug").trim()
-                    if (slug.isBlank() || slug.length > 200 ||
-                        slug.any { it.isWhitespace() || it.isISOControl() }) continue
-                    val label = model.optString("display_name", slug)
-                        .replace(Regex("[\\p{Cntrl}]+"), " ").trim()
-                        .take(72)
-                        .ifBlank { slug }
-                    add(Pair(slug, label))
-                }
+            } catch (e: java.io.IOException) {
+                throw ModelCatalogFailure(ModelCatalogStage.CONNECTION, cause = e)
             }
         } finally {
             connection.disconnect()
