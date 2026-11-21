@@ -34,5 +34,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: gpt-20-quiz-demo-debug
+          name: gpt-20-quiz-siwc-beta-debug
           path: app/build/outputs/apk/debug/*.apk
