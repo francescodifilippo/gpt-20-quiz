@@ -9,10 +9,23 @@
 - A ChatGPT account that is eligible for SIWC plan sharing. Approval is controlled in OpenAI's OAuth browser UI; it cannot be preauthorized by this repository.
 - This beta currently supports one connected account/registration. No developer API key is required.
 
+## Loopback timeout on Android — recovery in 0.2.1
+
+Some Android browsers cannot reach the local callback after ChatGPT consent (ERR_CONNECTION_TIMED_OUT at `127.0.0.1:<port>/auth/callback`). The app now starts OAuth in **Chrome Custom Tabs**, keeps its local listener alive with a time-limited **foreground short service**, and provides a manual recovery UI.
+
+1. Tap **Continue with ChatGPT**. You should see the browser login tab and an Android foreground-service notification.
+2. Complete ChatGPT authorization. If the callback page succeeds, return to GPT 20 Quiz to continue.
+3. If Chrome instead reports a timeout for **127.0.0.1**, copy the **complete URL** from Chrome's address bar. On your own phone, return to the GPT 20 Quiz app.
+4. Inside the login recovery panel labeled **CHROME NON RAGGIUNGE 127.0.0.1?**, paste the URL into the masked field, then tap **COMPLETA ACCESSO CON URL**.
+5. The app validates exact loopback host, port, callback path and one-time OAuth `state`, then forwards the request to its own listener. The code is consumed locally. **Never paste a callback URL or authorization code into ChatGPT, GitHub issues, email, screenshots, analytics, or logs.**
+6. This fallback is available only while sign-in is active and ends after the local OAuth listener times out; start a fresh login if expired.
+
+Important: Custom Tabs alone does not alter loopback routing. The Android foreground service mitigates background-process termination, and the manual option handles failures due to browser/proxy routing. We still need an actual on-device successful sign-in to confirm compatibility.
+
 ## First-time sign-in
 
 1. Launch the app. Verify the login screen shows **Continue with ChatGPT** and that **Start game** is disabled.
-2. Tap Continue with ChatGPT. The app starts a local HTTP listener on 127.0.0.1 with an unpredictable available port and opens the system browser at the official OpenAI authorization endpoint.
+2. Tap Continue with ChatGPT. The app starts a local HTTP listener on 127.0.0.1 with an unpredictable available port, holds it alive via a temporary foreground service, and opens the official OpenAI authorization endpoint in Chrome Custom Tabs.
 3. Confirm the browser requests permission for **GPT 20 Quiz**. If consent is granted, the browser should show a local page saying authorization was received. **Return manually to the app**; automatic app switching is not yet implemented.
 4. Confirm the app says the account is connected and the ChatGPT plan is authorized. If access was denied or the plan is ineligible, the app must not enable inference.
 5. Tap **Load available models**; select a listed model. The app must not invent a model or silently substitute a developer API key.
