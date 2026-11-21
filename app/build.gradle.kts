@@ -49,7 +49,7 @@ android {
         versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
             ?.takeIf { it > 0 && it < 1_000_000 }
             ?.let { 10000 + it }) ?: 5
-        versionName = "0.2.5-model-response-inspection"
+        versionName = "0.2.6-streaming-model-catalog"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -81,6 +81,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.browser:browser:1.10.0")
+    implementation("com.google.code.gson:gson:2.13.2")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
