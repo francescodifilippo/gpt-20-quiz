@@ -18,31 +18,71 @@ data class AiTurn(val kind: String, val text: String)
  */
 class LiveGameService(private val auth: SiwcAuthManager) {
     suspend fun availableModels(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
-        val accessToken = auth.accessToken()
-        val connection = (URL("https://api.openai.com/v1/models").openConnection() as HttpURLConnection)
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 12_000
-        connection.readTimeout = 30_000
-        connection.setRequestProperty("Authorization", "Bearer " + accessToken)
+        // Distinguish failure obtaining a usable OAuth token from failure at
+        // the actual GET /v1/models request. Never expose token values.
+        val accessToken = try {
+            auth.accessToken()
+        } catch (e: Exception) {
+            throw ModelCatalogFailure(ModelCatalogStage.ACCESS_TOKEN, cause = e)
+        }
+        val connection = try {
+            (URL("https://api.openai.com/v1/models").openConnection() as HttpURLConnection)
+                .apply {
+                    requestMethod = "GET"
+                    connectTimeout = 15_000
+                    readTimeout = 35_000
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("Authorization", "Bearer " + accessToken)
+                    // Only the server catalog is used to populate the model selector.
+                    instanceFollowRedirects = false
+                }
+        } catch (e: Exception) {
+            throw ModelCatalogFailure(ModelCatalogStage.CONNECTION, cause = e)
+        }
         try {
-            val status = connection.responseCode
-            val body = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()?.use { it.readText().take(200_000) } ?: ""
-            if (status !in 200..299) {
-                throw IllegalStateException("Model catalog unavailable (HTTP " + status + ")")
+            val status = try {
+                connection.responseCode
+            } catch (e: java.io.IOException) {
+                throw ModelCatalogFailure(ModelCatalogStage.CONNECTION, cause = e)
             }
-            val root = JSONObject(body)
+            val body = try {
+                val stream = if (status in 200..299)
+                    connection.inputStream else connection.errorStream
+                stream?.bufferedReader(StandardCharsets.UTF_8)?.use {
+                    it.readText().take(512_000)
+                }.orEmpty()
+            } catch (e: java.io.IOException) {
+                throw ModelCatalogFailure(ModelCatalogStage.CONNECTION, cause = e)
+            }
+            if (status !in 200..299) {
+                // Extract ONLY a short provider error code from the error JSON.
+                // The provider message and response body are never displayed.
+                val code = runCatching {
+                    val root = JSONObject(body)
+                    val nested = root.optJSONObject("error")
+                    nested?.optString("code")?.takeIf { it.isNotBlank() }
+                        ?: nested?.optString("type")
+                        ?: root.optString("code")
+                }.getOrNull()
+                throw ModelCatalogFailure(
+                    ModelCatalogStage.HTTP,
+                    httpStatus = status,
+                    providerErrorCode = code
+                )
+            }
+            val root = try {
+                JSONObject(body)
+            } catch (e: Exception) {
+                throw ModelCatalogFailure(ModelCatalogStage.JSON_RESPONSE, cause = e)
+            }
             val records = root.optJSONArray("models")
-                ?: throw IllegalStateException("No SIWC model catalog returned")
+                ?: throw ModelCatalogFailure(ModelCatalogStage.MODEL_SELECTION)
             buildList {
                 for (i in 0 until records.length()) {
                     val model = records.optJSONObject(i) ?: continue
                     if (model.optString("visibility") != "list") continue
                     val slug = model.optString("slug").trim()
-                    // Model names come from the account catalog, not freeform
-                    // user text. Limit UI labels and never render entire server
-                    // responses, JSON or unexpected multiline content.
-                    if (slug.isBlank() || slug.length > 120 ||
+                    if (slug.isBlank() || slug.length > 200 ||
                         slug.any { it.isWhitespace() || it.isISOControl() }) continue
                     val label = model.optString("display_name", slug)
                         .replace(Regex("[\\p{Cntrl}]+"), " ").trim()
@@ -51,7 +91,9 @@ class LiveGameService(private val auth: SiwcAuthManager) {
                     add(Pair(slug, label))
                 }
             }
-        } finally { connection.disconnect() }
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private suspend fun completion(
