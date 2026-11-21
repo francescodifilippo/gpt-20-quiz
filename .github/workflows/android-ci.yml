@@ -1,4 +1,4 @@
-name: Android UI prototype CI
+name: Android beta build and tests
 
 on:
   push:
@@ -29,10 +29,47 @@ jobs:
           yes | "$SDKMGR" --licenses >/dev/null || true
           "$SDKMGR" --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Unit tests and debug APK
+      - name: Restore stable beta signing key (protected Actions secrets)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          BETA_KEYSTORE_BASE64: ${{ secrets.GPT20_BETA_KEYSTORE_BASE64 }}
+          BETA_STORE_PASSWORD: ${{ secrets.GPT20_BETA_STORE_PASSWORD }}
+          BETA_KEY_ALIAS: ${{ secrets.GPT20_BETA_KEY_ALIAS }}
+          BETA_KEY_PASSWORD: ${{ secrets.GPT20_BETA_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$BETA_KEYSTORE_BASE64" || -z "$BETA_STORE_PASSWORD" || -z "$BETA_KEY_ALIAS" || -z "$BETA_KEY_PASSWORD" ]]; then
+            echo "::warning::Stable signing secrets not configured. Tests run, but no installable artifact will be published."
+            echo "GPT20_PUBLISH_SIGNED=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          umask 077
+          keystore="$RUNNER_TEMP/gpt20-beta.jks"
+          printf '%s' "$BETA_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          test -s "$keystore"
+          keytool -list -keystore "$keystore" -alias "$BETA_KEY_ALIAS" -storepass "$BETA_STORE_PASSWORD" >/dev/null
+          printf '%s\n' "GPT20_SIGNING_STORE_FILE=$keystore" >> "$GITHUB_ENV"
+          printf '%s\n' "GPT20_SIGNING_STORE_PASSWORD=$BETA_STORE_PASSWORD" >> "$GITHUB_ENV"
+          printf '%s\n' "GPT20_SIGNING_KEY_ALIAS=$BETA_KEY_ALIAS" >> "$GITHUB_ENV"
+          printf '%s\n' "GPT20_SIGNING_KEY_PASSWORD=$BETA_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "GPT20_PUBLISH_SIGNED=true" >> "$GITHUB_ENV"
+      - name: Unit tests and debug APK build
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify stable signature and prepare fixed APK name
+        if: github.event_name != 'pull_request' && env.GPT20_PUBLISH_SIGNED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/gpt-20-quiz.apk
+          sdk_root="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          "$sdk_root/build-tools/37.0.0/apksigner" verify --verbose --print-certs dist/gpt-20-quiz.apk
+          sha256sum dist/gpt-20-quiz.apk
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: github.event_name != 'pull_request' && env.GPT20_PUBLISH_SIGNED == 'true'
         with:
-          name: gpt-20-quiz-siwc-beta-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: gpt-20-quiz-signed-beta
+          path: dist/gpt-20-quiz.apk
+          if-no-files-found: error
+          retention-days: 45
