@@ -1,6 +1,6 @@
 # Sign in with ChatGPT (SIWC) — Android technical notes
 
-**Status:** design only, not yet integrated or authenticated successfully on Android.
+**Status:** Android OAuth/PKCE + ID token validation, encrypted device-local token handling, model discovery and streaming Responses integration have been implemented in source. **No actual SIWC authorization has yet been verified on a physical Android phone**; treat this as a beta integration awaiting real-device tests. The browser loopback redirect must be proven on supported Android versions.
 
 ## Documentation
 
@@ -52,3 +52,12 @@ For preview compatibility, **do not use** unsupported top-level `prompt`, `previ
 ## Acceptance criteria
 
 On a real Android device: initial registration, browser return, valid ID token, plan usage granted/declined, successful streamed response, token renewal, logout/revoke, offline state, and handling of an ineligible plan. Document platform version, device, network, and result for each test.
+
+
+## Implementation update — November 21, 2026
+
+- Actual entry point: `RealQuizApp` in `RealQuizApp.kt`; the earlier `QuizApp` offline mock is not launched.
+- `SiwcAuth.kt`: local loopback HTTP listener, system-browser OAuth, state/nonce/PKCE validation, issued client ID, RS256 OIDC/JWKS verification, encrypted Android Keystore token storage, refresh, disconnect, explicit re-consent if necessary.
+- `LiveGameService.kt`: direct `GET /v1/models`, selected model, streamed `POST /v1/responses` with `store:false` and `stream:true`, role-specific prompts and full game history. No simulated gameplay fallback.
+- This beta uses one connected account. Multi-account saved registration support, first-use notice, process-death handling, token-revocation QA, and real Android loopback testing are required prior to production.
+- Use `docs/SIWC_ANDROID_TEST.md` for device tests. Never paste tokens or complete callback URLs into GitHub issues.
