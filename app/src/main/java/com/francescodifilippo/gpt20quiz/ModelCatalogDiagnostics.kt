@@ -65,7 +65,7 @@ object ModelCatalogDiagnostics {
                     else "Could not reach api.openai.com. Retry on Wi-Fi or another network."
                 }
             }
-            ModelCatalogStage.HTTP -> when (failure.httpStatus) {
+            ModelCatalogStage.HTTP -> when (failure.httpStatus ?: 0) {
                 401 -> if (italian)
                     "HTTP 401: token rifiutato o scaduto. Scollega e riconnetti ChatGPT."
                 else "HTTP 401: token rejected or expired. Disconnect and reconnect ChatGPT."
