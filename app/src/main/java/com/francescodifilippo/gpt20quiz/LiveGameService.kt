@@ -139,15 +139,19 @@ class LiveGameService(private val auth: SiwcAuthManager) {
             }
             val status = connection.responseCode
             if (status !in 200..299) {
-                val message = connection.errorStream?.bufferedReader()?.use {
+                // Read a bounded error response; extract code and parameter,
+                // never the provider's raw message or any request credentials.
+                val responseText = connection.errorStream?.bufferedReader()?.use {
                     it.readText().take(5000)
-                } ?: ""
-                val code = runCatching {
-                    JSONObject(message).optJSONObject("error")?.optString("code")
-                }.getOrNull().orEmpty()
-                throw IllegalStateException(
-                    "ChatGPT request failed (HTTP " + status + ")" +
-                        if (code.isBlank()) "" else ": " + code.take(120)
+                }.orEmpty()
+                val details = runCatching {
+                    JSONObject(responseText).optJSONObject("error")
+                }.getOrNull()
+                throw SiwcInferenceFailure(
+                    statusCode = status,
+                    providerCode = details?.optString("code"),
+                    providerParameter = details?.optString("param"),
+                    requestedEffort = effort
                 )
             }
             val output = StringBuilder()
