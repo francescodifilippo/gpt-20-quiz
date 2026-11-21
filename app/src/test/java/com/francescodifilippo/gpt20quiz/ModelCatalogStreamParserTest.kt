@@ -70,7 +70,7 @@ class ModelCatalogStreamParserTest {
     @Test fun truncatedResponseIsRejectedAndNeverTreatedAsAValidCatalog() {
         val failure = assertThrows(ModelCatalogStreamParser.Failure::class.java) {
             ModelCatalogStreamParser.parse(StringReader(
-                """{"models":[{"visibility":"list","slug":"gpt-6""""
+                "{\"models\":[{\"visibility\":\"list\",\"slug\":\"gpt-6\""
             ))
         }
         assertEquals(ModelCatalogStreamParser.Problem.MALFORMED_JSON, failure.problem)
