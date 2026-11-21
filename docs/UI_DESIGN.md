@@ -12,6 +12,23 @@ Native Android / Jetpack Compose, dark immersive game experience with high contr
 - Pinned top-level scores visible on both role cards; distinct persisted SharedPreferences keys.
 - Start/new game always restarts from 20, preserving career scores.
 
+## Game language picker
+
+The Home screen contains a prominent language-selection tile. It opens a
+dedicated searchable list with the following display order:
+
+1. Latin (`la`)
+2. Esperanto (`eo`)
+3. Automatic (`auto`) — **default** — device BCP 47 locale
+4. The 24 official EU languages (alphabetical by primary Italian name).
+
+The last chosen preference persists locally as `game_language_code`.
+The game freezes the effective locale when Start/New Game is pressed.
+Italian/English is still the independent application UI language toggle.
+The gameplay header shows the frozen game language, below the large
+remaining-questions counter. Latin and Esperanto are also covered by
+prompt-contract tests.
+
 ## In-game
 - Remaining question count is always at the top, displayed at 80+ sp.
 - Twenty-segment progress bar; count decreases on accepted turns, not on rendering.
