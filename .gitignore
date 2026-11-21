@@ -1,0 +1,27 @@
+# Gradle / Android
+.gradle/
+build/
+**/build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.apks
+*.keystore
+*.jks
+*.hprof
+.DS_Store
+
+# Logs, local secrets and credentials
+*.log
+.env
+.env.*
+!.env.example
+secrets.properties
+*.token
+*credentials*.json
+*chatgpt-host*.json
