@@ -29,6 +29,14 @@ class TwentyQuestionsStrategyTest {
         assertTrue(prompt.contains("do not disclose reasoning"))
     }
 
+    @Test fun aRejectedGuessIsRememberedAndDoesNotEndTheMatch() {
+        val prompt = TwentyQuestionsStrategy.aiGuesser
+        assertTrue(prompt.contains("A wrong guess costs one turn"))
+        assertTrue(prompt.contains("game CONTINUES if turns remain"))
+        assertTrue(prompt.contains("kind=\"guess\" and answer=\"no\""))
+        assertTrue(prompt.contains("do not repeat them"))
+    }
+
     @Test fun answererAndVerifierUseConsistentCategoryPolicy() {
         assertTrue(TwentyQuestionsStrategy.verifyHumanGuess.contains(
             "recognizable type even when the secret has a"
