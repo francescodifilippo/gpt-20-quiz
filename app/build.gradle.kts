@@ -15,8 +15,8 @@ android {
         applicationId = "com.francescodifilippo.gpt20quiz"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0-siwc-beta"
+        versionCode = 3
+        versionName = "0.2.1-siwc-callback"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -47,6 +47,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.browser:browser:1.10.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
