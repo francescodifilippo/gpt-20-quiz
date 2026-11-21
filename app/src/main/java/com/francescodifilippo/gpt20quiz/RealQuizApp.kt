@@ -222,7 +222,9 @@ fun RealQuizApp() {
 
     /** Symmetric rule when the human plays as guesser. */
     fun resolveHumanGuess(correct: Boolean, guessedText: String) {
-        if (busy || role != PlayerRole.GUESSER ||
+        // Called inside the still-busy inference coroutine after verification:
+        // the UI remains locked until the callback returns.
+        if (role != PlayerRole.GUESSER ||
             currentPage != GamePhase.PLAYING) return
         val decision = GameRules.resolveGuess(remaining, correct)
         when (decision.outcome) {
