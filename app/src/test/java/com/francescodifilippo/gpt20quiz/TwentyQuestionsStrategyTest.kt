@@ -25,7 +25,7 @@ class TwentyQuestionsStrategyTest {
     @Test fun lastActionIsFinalGuessAndOutputIsMachineReadable() {
         val prompt = TwentyQuestionsStrategy.aiGuesser
         assertTrue(prompt.contains("On turn 20 you MUST guess"))
-        assertTrue(prompt.contains("\"kind\":\"question\"|\"guess\""))
+        assertTrue(prompt.contains("with \"kind\" equal to \"question\" or \"guess\""))
         assertTrue(prompt.contains("do not disclose reasoning"))
     }
 
