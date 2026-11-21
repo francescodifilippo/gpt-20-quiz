@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.0).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but end-to-end SIWC authorization and model inference are NOT YET VERIFIED ON A PHYSICAL ANDROID DEVICE. Do not treat this as a production-ready release.
+> **Status: SIWC-enabled Android beta (0.2.1).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but end-to-end SIWC authorization and model inference are NOT YET VERIFIED ON A PHYSICAL ANDROID DEVICE. Do not treat this as a production-ready release.
 
 ## Concept
 
@@ -18,6 +18,8 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 - [LiveGameService.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/LiveGameService.kt) uses the user's authorized bearer token for `POST https://api.openai.com/v1/responses`, with `store:false`, `stream:true`, explicit game context and terminal event checks. Two distinct role prompts drive the game; no mock answers appear in the actual app entry point.
 - The game keeps the **large 20-question countdown**, separate local scores by role and its language selector (Latin, Esperanto, Automatic/default, then 24 EU official languages).
 - Build variant **0.2.0-siwc-beta** is a debug app; obtain its APK from the `gpt-20-quiz-siwc-beta-debug` artifact in the latest successful [GitHub Actions](../../actions) run.
+
+**Callback improvement in 0.2.1:** Chrome Custom Tabs opens OAuth; a temporary Android foreground service keeps the one-use 127.0.0.1 listener alive. If Chrome reports `ERR_CONNECTION_TIMED_OUT`, the player can copy the complete callback URL, return to GPT 20 Quiz and paste it **only in the app's masked recovery field**. Kotlin validates matching host, port, path, state and one-use code. Never share a callback URL in a chat, issue or screenshot. See [device testing instructions](docs/SIWC_ANDROID_TEST.md).
 
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
