@@ -8,7 +8,8 @@ import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-data class GameExchange(val question: String, val answer: String)
+/** kind=guess means a previous attempted identification was rejected. */
+data class GameExchange(val question: String, val answer: String, val kind: String = "question")
 
 data class AiTurn(val kind: String, val text: String)
 
@@ -211,7 +212,7 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         val historyArray = JSONArray()
         history.forEach {
             historyArray.put(JSONObject().put("question", it.question)
-                .put("answer", it.answer))
+                .put("answer", it.answer).put("kind", it.kind))
         }
         val state = JSONObject().put("history", historyArray)
             .put("questionNumber", session.questionNumber)
@@ -259,7 +260,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
             "\n\n" + GameLanguagePrompt.initialInstructions(session)
         val previous = JSONArray()
         history.forEach {
-            previous.put(JSONObject().put("question", it.question).put("answer", it.answer))
+            previous.put(JSONObject().put("question", it.question)
+                .put("answer", it.answer).put("kind", it.kind))
         }
         val result = completion(model, instructions, JSONObject()
             .put("secret", secret)
