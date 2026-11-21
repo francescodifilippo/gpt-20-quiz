@@ -18,7 +18,7 @@ class TwentyQuestionsStrategyTest {
         val text = TwentyQuestionsStrategy.aiGuesser
         assertTrue(text.contains("pedestal vs separate feet"))
         assertTrue(text.contains("brand"))
-        assertTrue(text.contains("earlier"))
+        assertTrue(text.contains("guess NOW"))
         assertTrue(text.contains("Do NOT ask"))
     }
 
