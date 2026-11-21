@@ -10,6 +10,22 @@
 
 Think of a person, animal, object, place, or concept. An AI game host tries to guess it by asking up to 20 questions. Respond with **Yes / No / Probably / Probably not / Don't know**. Each question should reduce uncertainty using the full answer history. The app uses the device's preferred language, supports language selection, and delegates game text to the model for languages without a bundled translation.
 
+## Installations and in-place updates
+
+**The APK's filename does not control Android upgrades.** Android verifies the package ID, signing certificate, and an increasing versionCode. Earlier CI runs generated a different debug signing key on each temporary runner, which made consecutive builds incompatible.
+
+The repository now supports **persistent, private beta signing** with GitHub Actions Secrets, and a fixed published filename **gpt-20-quiz.apk**. New APK artifacts are published **only when the stable signing key has been configured**. CI continues to run tests without secrets but will not publish a misleading non-upgradeable APK.
+
+To configure signing once from Linux/macOS/WSL, with JDK, openssl and authenticated GitHub CLI:
+
+~~~bash
+bash scripts/configure-beta-signing.sh
+~~~
+
+The script creates and securely stores a local signing key/password and uploads **four protected repository secrets** using your GitHub credentials. Back up the private signing files outside the repository. See the full guide: [Android stable signing and upgrades](docs/ANDROID_UPDATES_SIGNING.md).
+
+**One final uninstall may be required** when replacing APKs 0.2.0–0.2.2, which were signed with temporary CI certificates. Once the persistently signed beta is installed, future versions with the same signing key can update in place. CI versionCode is derived from the monotonically increasing GitHub Actions run number.
+
 ## SIWC live beta — entry point
 
 The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/RealQuizApp.kt), not the older offline mock. It will not enable **Start game** until the user grants ChatGPT plan usage and selects a model from the account's own `/v1/models` catalog.
@@ -17,7 +33,7 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 - [SiwcAuth.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/SiwcAuth.kt) starts official OAuth Authorization Code + PKCE via the system browser and a device-local 127.0.0.1 callback, verifies OpenAI's RS256 OIDC signature and claims, stores tokens encrypted through Android Keystore, and refreshes/disconnects the session.
 - [LiveGameService.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/LiveGameService.kt) uses the user's authorized bearer token for `POST https://api.openai.com/v1/responses`, with `store:false`, `stream:true`, explicit game context and terminal event checks. Two distinct role prompts drive the game; no mock answers appear in the actual app entry point.
 - The game keeps the **large 20-question countdown**, separate local scores by role and its language selector (Latin, Esperanto, Automatic/default, then 24 EU official languages).
-- Build variant **0.2.0-siwc-beta** is a debug app; obtain its APK from the `gpt-20-quiz-siwc-beta-debug` artifact in the latest successful [GitHub Actions](../../actions) run.
+- Build variant **0.2.3-stable-signing** is a debug app; after the signing secrets are configured, obtain `gpt-20-quiz.apk` from the `gpt-20-quiz-signed-beta` artifact in [GitHub Actions](../../actions).
 
 **Callback improvement in 0.2.1:** Chrome Custom Tabs opens OAuth; a temporary Android foreground service keeps the one-use 127.0.0.1 listener alive. If Chrome reports `ERR_CONNECTION_TIMED_OUT`, the player can copy the complete callback URL, return to GPT 20 Quiz and paste it **only in the app's masked recovery field**. Kotlin validates matching host, port, path, state and one-use code. Never share a callback URL in a chat, issue or screenshot. See [device testing instructions](docs/SIWC_ANDROID_TEST.md).
 
