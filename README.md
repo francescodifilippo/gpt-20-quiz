@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.9).** Android browser sign-in, account-scoped model selection and real gameplay have been observed on a physical device. Kotlin compilation and JVM tests run in GitHub Actions. Game quality, model compatibility and broader Android coverage remain experimental; this is not a production release.
+> **Status: SIWC-enabled Android beta (0.2.10).** Android browser sign-in, account-scoped model selection and real gameplay have been observed on a physical device. Kotlin compilation and JVM tests run in GitHub Actions. Game quality, model compatibility and broader Android coverage remain experimental; this is not a production release.
 
 ## Concept
 
@@ -40,6 +40,34 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Beta 0.2.10 — incorrect guesses continue the round
+
+The Android beta previously ended the match on **every** AI final-guess
+attempt: if the human pressed "No, AI was wrong" after an early guess,
+the game incorrectly stopped and awarded the responder the win, even
+when questions remained. The same premature termination happened when
+a human guesser made an incorrect guess.
+
+**New house rule:** A proposed identity may be guessed at any time and
+always consumes **one of 20 actions**. A correct guess ends the round.
+An incorrect guess before the twentieth action is recorded as a
+rejected guess (kind="guess", answer="no") and the game continues
+with the updated history and remaining turn counter. An incorrect
+twentieth guess ends the round in favor of the answerer.
+
+The UI asks simply **Sì / No** on AI identity guesses, with an explicit
+explanation that "No" spends one turn and continues when possible.
+The same rule applies when the player is the guesser. The countdown
+and independent role scores remain enforced by the Android engine.
+
+- [GameRules.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/GameRules.kt)
+- [LiveGameService.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/LiveGameService.kt)
+- [Prompt v3 + game rule amendment](prompts/twenty_questions_v3.md)
+
+Regression tests cover early wrong and correct guesses, the final
+incorrect guess, the full 20-turn maximum and the history instruction.
+The gameplay change must still be validated by a real match on Android.
 
 ## Beta 0.2.9 — recover from unsupported reasoning effort
 
