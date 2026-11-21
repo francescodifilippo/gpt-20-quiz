@@ -4,11 +4,28 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: design / early experimental scaffold.** There is no installable Android APK yet. Authentication and gameplay have not yet been validated on an Android device.
+> **Status: native Android UI demo in source control.** Kotlin/Jetpack Compose screens, independent role scores and scripted offline gameplay are implemented. CI is configured to build an APK; CI results have not yet been verified. SIWC authentication and AI inference are not implemented. No real-AI gameplay claims are made.
 
 ## Concept
 
 Think of a person, animal, object, place, or concept. An AI game host tries to guess it by asking up to 20 questions. Respond with **Yes / No / Probably / Probably not / Don't know**. Each question should reduce uncertainty using the full answer history. The app uses the device's preferred language, supports language selection, and delegates game text to the model for languages without a bundled translation.
+
+## Android UI demo (November 2026)
+
+The repository includes an interactive **Compose UI prototype** in [MainActivity.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/MainActivity.kt):
+
+- Dark neon theme with gradient hero and luminous accents.
+- A very large **20 → 0** question countdown at the top of every game turn, plus a 20-segment progress indicator.
+- Role choice **Guesser** (you ask) / **Responder** (you answer), with independent score totals and victory counters saved locally on device.
+- **New Game** after each result, a clear earned-points result panel, and switch-role navigation.
+- Italian/English static UI toggle (English fallback for other locales until translated). Model-generated arbitrary-language dialog is upcoming SIWC work.
+- **Explicit demo mode**: scripted questions, deterministic mock replies, and self-reported guess success. The UI does not yet communicate with an AI.
+
+**Demo scoring:** Guesser wins earn `100 + (unused turns × 10)`; Responder wins earn `100 + (survived turns × 10)`. Losses earn 0. Totals and wins are stored separately for each role using local `SharedPreferences`. Because demo mode has no real opponent, demo scores are not competitive or verified.
+
+**Build:** Open the project in Android Studio with JDK 17, Gradle 9.6 / AGP 9.4 and Android SDK 37 installed, or run `./gradlew :app:testDebugUnitTest :app:assembleDebug`. A GitHub Actions workflow performs this build on commits to main; successful builds upload a debug APK artifact. This is an unsigned-for-distribution **debug** build, not a Play Store release.
+
+See the [UI design specification](docs/UI_DESIGN.md) and [Android CI workflow](.github/workflows/android-ci.yml).
 
 ## Technology
 
