@@ -49,7 +49,7 @@ android {
         versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
             ?.takeIf { it > 0 && it < 1_000_000 }
             ?.let { 10000 + it }) ?: 5
-        versionName = "0.2.6-streaming-model-catalog"
+        versionName = "0.2.7-early-guesses-effort"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
