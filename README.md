@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.7).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
+> **Status: SIWC-enabled Android beta (0.2.8).** Android browser sign-in, account-scoped model selection and real gameplay have been observed on a physical device. Kotlin compilation and JVM tests run in GitHub Actions. Game quality, model compatibility and broader Android coverage remain experimental; this is not a production release.
 
 ## Concept
 
@@ -40,6 +40,28 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Beta 0.2.8 — shorter neutral prompt and one-sentence language rule
+
+The v2 live prompt was unnecessarily verbose and mentioned a specific
+**Stokke chair**. That example was useful for reviewing a failed game,
+but it could bias subsequent questions toward chairs. The new
+[compact v3 prompt](prompts/twenty_questions_v3.md) removes target-specific
+examples and gives the model only: maximize question information gain,
+avoid repetition, guess early when a common object identity is likely,
+and make the final guess by turn 20. Role-specific JSON contracts remain
+explicit.
+
+The game-language instruction is now **one sentence**, for example:
+"Use Italian (it-IT) for all player-facing game text; keep JSON field
+names and answer codes unchanged." Automatic language selection is
+resolved on Android before the sentence is generated. Role, remaining
+turns and answer history remain structured game state rather than
+redundant language prompt paragraphs.
+
+This is an implementation change and a hypothesis about better gameplay,
+not a claim of measured higher win rates. Follow-up should compare
+successful guesses and turns consumed across representative games.
 
 ## Beta 0.2.7 — model-independent effort and early object-category guessing
 
