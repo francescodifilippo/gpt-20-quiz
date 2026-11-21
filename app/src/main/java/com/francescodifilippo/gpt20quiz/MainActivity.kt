@@ -48,9 +48,21 @@ class MainActivity : ComponentActivity() {
 private fun QuizApp() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("demo_score", 0) }
-    val deviceLanguage = LocalConfiguration.current.locales[0].language
-    var language by rememberSaveable { mutableStateOf(if (deviceLanguage == "it") "it" else "en") }
+    val deviceLanguageTag = LocalConfiguration.current.locales[0].toLanguageTag()
+    // The UI language (IT/EN) and the selected game language are independent.
+    var language by rememberSaveable {
+        mutableStateOf(if (deviceLanguageTag.substringBefore("-") == "it") "it" else "en")
+    }
     val it = language == "it"
+    // "auto" is the DEFAULT, regardless of which language happens to be first in the list.
+    var selectedGameLanguage by rememberSaveable {
+        mutableStateOf(GameLanguages.option(prefs.getString("game_language_code", GameLanguages.AUTO)).code)
+    }
+    var inLanguagePicker by rememberSaveable { mutableStateOf(false) }
+    var activeGameLanguageCode by rememberSaveable { mutableStateOf(GameLanguages.AUTO) }
+    var activeGameLanguageTag by rememberSaveable {
+        mutableStateOf(GameLanguages.resolve(GameLanguages.AUTO, deviceLanguageTag).effectiveLanguageTag)
+    }
     var roleId by rememberSaveable { mutableStateOf(PlayerRole.GUESSER.name) }
     val role = PlayerRole.valueOf(roleId)
     var phaseId by rememberSaveable { mutableStateOf(GamePhase.HOME.name) }
@@ -68,6 +80,11 @@ private fun QuizApp() {
 
     fun begin(chosen: PlayerRole) {
         roleId = chosen.name
+        // Freeze the effective game language at the beginning of the match.
+        val selection = GameLanguages.resolve(selectedGameLanguage, deviceLanguageTag)
+        activeGameLanguageCode = selection.preferenceCode
+        activeGameLanguageTag = selection.effectiveLanguageTag
+        inLanguagePicker = false
         phaseId = GamePhase.PLAYING.name
         remaining = 20
         turn = 0
@@ -113,21 +130,52 @@ private fun QuizApp() {
             ) {
                 Spacer(Modifier.height(3.dp))
                 AppHeader(it, onLanguage = { language = if (it) "en" else "it" },
-                    onHome = { phaseId = GamePhase.HOME.name })
+                    onHome = {
+                        phaseId = GamePhase.HOME.name
+                        inLanguagePicker = false
+                    })
                 when (phase) {
                     GamePhase.HOME -> {
-                        Hero(it)
-                        Text(if (it) "SCEGLI DA CHE PARTE STARE" else "CHOOSE YOUR SIDE",
-                            color = muted, fontSize = 12.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                        RoleTile(PlayerRole.GUESSER, role == PlayerRole.GUESSER, it,
-                            guessScore, guessWins) { roleId = PlayerRole.GUESSER.name }
-                        RoleTile(PlayerRole.RESPONDER, role == PlayerRole.RESPONDER, it,
-                            answerScore, answerWins) { roleId = PlayerRole.RESPONDER.name }
-                        MainButton(if (it) "INIZIA PARTITA" else "START GAME") { begin(role) }
-                        DemoNotice(it)
+                        if (inLanguagePicker) {
+                            LanguagePicker(
+                                italianUi = it,
+                                selectedCode = selectedGameLanguage,
+                                deviceLanguageTag = deviceLanguageTag,
+                                onSelect = { code ->
+                                    selectedGameLanguage = GameLanguages.option(code).code
+                                    prefs.edit().putString("game_language_code", selectedGameLanguage).apply()
+                                },
+                                onBack = { inLanguagePicker = false }
+                            )
+                        } else {
+                            Hero(it)
+                            GameLanguageTile(
+                                italianUi = it,
+                                selectionCode = selectedGameLanguage,
+                                deviceTag = deviceLanguageTag,
+                                onClick = { inLanguagePicker = true }
+                            )
+                            Text(if (it) "SCEGLI DA CHE PARTE STARE" else "CHOOSE YOUR SIDE",
+                                color = muted, fontSize = 12.sp, letterSpacing = 1.5.sp,
+                                fontWeight = FontWeight.Bold)
+                            RoleTile(PlayerRole.GUESSER, role == PlayerRole.GUESSER, it,
+                                guessScore, guessWins) { roleId = PlayerRole.GUESSER.name }
+                            RoleTile(PlayerRole.RESPONDER, role == PlayerRole.RESPONDER, it,
+                                answerScore, answerWins) { roleId = PlayerRole.RESPONDER.name }
+                            MainButton(if (it) "INIZIA PARTITA" else "START GAME") { begin(role) }
+                            DemoNotice(it)
+                        }
                     }
                     GamePhase.PLAYING -> {
                         Countdown(remaining, role, it)
+                        // Snapshot consumed by the future SIWC prompt adapter.
+                        val state = GameSessionState(
+                            role = role,
+                            language = GameLanguages.resolve(activeGameLanguageCode, activeGameLanguageTag),
+                            questionNumber = GameRules.MAX_TURNS - remaining + 1,
+                            questionsRemaining = remaining
+                        )
+                        GameLanguageIndicator(state.language, it)
                         if (role == PlayerRole.RESPONDER) {
                             val final = remaining == 1
                             QuestionBox(
@@ -211,6 +259,9 @@ private fun QuizApp() {
                         DemoNotice(it)
                     }
                     GamePhase.RESULT -> {
+                        GameLanguageIndicator(
+                            GameLanguages.resolve(activeGameLanguageCode, activeGameLanguageTag), it
+                        )
                         ResultPanel(it, role, lastWon, lastAward,
                             if (role == PlayerRole.GUESSER) guessScore else answerScore)
                         MainButton(if (it) "NUOVA PARTITA" else "NEW GAME") { begin(role) }
@@ -441,7 +492,7 @@ private fun DemoNotice(it: Boolean) {
         fontSize = 11.sp, lineHeight = 16.sp, textAlign = TextAlign.Center)
 }
 
-private fun sampleQuestion(index: Int, it: Boolean): String {
+private fun sampleQuestion(index: Int, italianUi: Boolean): String {
     val italian = listOf(
         "È qualcosa di vivente?", "Si trova in natura?", "È più grande di una persona?",
         "Può muoversi da solo?", "Si può toccare?", "È presente in molte case?",
@@ -462,7 +513,7 @@ private fun sampleQuestion(index: Int, it: Boolean): String {
         "Is it related to technology?", "Can it be found outdoors?",
         "Is it rare?", "Would children know it?"
     )
-    return (if (it) italian else english).getOrElse(index) {
-        if (it) "È qualcosa di conosciuto?" else "Is it widely known?"
+    return (if (italianUi) italian else english).getOrElse(index) {
+        if (italianUi) "È qualcosa di conosciuto?" else "Is it widely known?"
     }
 }
