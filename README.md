@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.1).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but end-to-end SIWC authorization and model inference are NOT YET VERIFIED ON A PHYSICAL ANDROID DEVICE. Do not treat this as a production-ready release.
+> **Status: SIWC-enabled Android beta (0.2.2).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
 
 ## Concept
 
@@ -24,6 +24,19 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Beta 0.2.2 — model selector, language navigation, bounded messages
+
+Following a successful Android SIWC sign-in test, beta 0.2.2 addresses user-reported UX issues:
+
+- On sign-in or app restart, request the signed-in user's model catalog automatically.
+- Show request progress and counts directly next to the model selector; display concise errors and a Retry/Refresh button on failure or empty results, without falling back to simulated answers.
+- Keep the large countdown and per-role scoreboards from the original UI.
+- The language screen has a back button at its top, Android system Back support, and automatically returns to setup when a language is selected.
+- Do not render raw service response bodies or full prompt text as a bottom-of-screen message. Limit model display names to concise single-line labels.
+- Explain why **Start new game** is disabled: sign-in, missing plan consent, loading, or model not chosen.
+
+**Remaining:** verify the actual model catalog and start a real game on the Android phone. If the account exposes no eligible models, the app displays that status instead of inventing a model.
 
 ## Legacy UI demo (not launched)
 The repository retains an earlier, no-longer-launched **Compose UI prototype** in [MainActivity.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/MainActivity.kt):
