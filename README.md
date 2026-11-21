@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.8).** Android browser sign-in, account-scoped model selection and real gameplay have been observed on a physical device. Kotlin compilation and JVM tests run in GitHub Actions. Game quality, model compatibility and broader Android coverage remain experimental; this is not a production release.
+> **Status: SIWC-enabled Android beta (0.2.9).** Android browser sign-in, account-scoped model selection and real gameplay have been observed on a physical device. Kotlin compilation and JVM tests run in GitHub Actions. Game quality, model compatibility and broader Android coverage remain experimental; this is not a production release.
 
 ## Concept
 
@@ -40,6 +40,37 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Beta 0.2.9 — recover from unsupported reasoning effort
+
+A real device test selected **gpt-6.2-sol** with `reasoning.effort=minimal`
+and received **HTTP 400 `unsupported_value`** before the first question.
+OpenAI's GPT-6.2 migration guide recommends **low** rather than
+`none`/`minimal`. This is a model request-parameter incompatibility,
+not an OAuth login error and not a failure of the Twenty Questions prompt.
+
+The beta now:
+- Parses only short safe `error.code` and `error.param` fields from the
+  HTTP error body. Raw provider messages, tokens and request payloads remain
+  excluded from the UI.
+- Distinguishes a confirmed `reasoning.effort` rejection from a probable
+  effort rejection when the provider omits the rejected parameter.
+- On an effort-related HTTP 400 **inside a match**, displays the same
+  independent effort selector beside the model and permits the player to
+  change their effort **explicitly**, then retry the current action
+  without consuming a question.
+- Preserves the selected value across model changes and never silently
+  downgrades it. For GPT-6.2, suggests **low** or **auto** where appropriate.
+- Includes JVM tests for named parameters, missing parameters, unrelated
+  failures and safe redaction.
+
+The model picker and effort selector remain **independent**, as requested;
+individual model capability restrictions are explained by the API response,
+rather than hiding effort options.
+
+Sources:
+- [GPT-6.2 migration guide](https://developers.openai.com/api/docs/guides/latest-model)
+- [Reasoning guide](https://developers.openai.com/api/docs/guides/reasoning)
 
 ## Beta 0.2.8 — shorter neutral prompt and one-sentence language rule
 
