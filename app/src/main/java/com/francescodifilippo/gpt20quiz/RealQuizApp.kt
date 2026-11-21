@@ -195,6 +195,50 @@ fun RealQuizApp() {
         }
     }
 
+    /**
+     * An unsuccessful early attempt is a NO answer, not a terminal loss.
+     * Preserve the exact rejected guess for the next AI turn.
+     */
+    fun resolveAiGuess(correct: Boolean) {
+        if (busy || role != PlayerRole.RESPONDER ||
+            currentPage != GamePhase.PLAYING || questionKind != "guess") return
+
+        val decision = GameRules.resolveGuess(remaining, correct)
+        when (decision.outcome) {
+            GuessOutcome.CORRECT -> finish(false) // The AI guessed: human responder lost.
+            GuessOutcome.INCORRECT_EXHAUSTED -> finish(true) // All 20 used; human wins.
+            GuessOutcome.INCORRECT_CONTINUE -> {
+                history.add(GameExchange(currentQuestion, "no", "guess"))
+                remaining = decision.remainingAfter
+                lastAnswer = if (italian)
+                    "Ipotesi esclusa. L'AI può continuare."
+                else "Guess rejected. The AI can continue."
+                currentQuestion = ""
+                questionKind = ""
+                nextAiTurn()
+            }
+        }
+    }
+
+    /** Symmetric rule when the human plays as guesser. */
+    fun resolveHumanGuess(correct: Boolean, guessedText: String) {
+        if (busy || role != PlayerRole.GUESSER ||
+            currentPage != GamePhase.PLAYING) return
+        val decision = GameRules.resolveGuess(remaining, correct)
+        when (decision.outcome) {
+            GuessOutcome.CORRECT -> finish(true)
+            GuessOutcome.INCORRECT_EXHAUSTED -> finish(false)
+            GuessOutcome.INCORRECT_CONTINUE -> {
+                history.add(GameExchange(guessedText, "no", "guess"))
+                remaining = decision.remainingAfter
+                input = ""
+                lastAnswer = if (italian)
+                    "No, ipotesi esclusa. Restano " + remaining + " tentativi."
+                else "No, guess rejected. " + remaining + " attempts remain."
+            }
+        }
+    }
+
     fun startGame() {
         if (session?.canUsePlan != true || busy || selectedModel.isBlank()) return
         activeLanguage = GameLanguages.resolve(selectedGameLanguage, deviceLocale)
@@ -473,6 +517,9 @@ fun RealQuizApp() {
                             )
                         }
                         if (role == PlayerRole.RESPONDER) {
+                            if (lastAnswer.isNotBlank()) {
+                                Text(lastAnswer, color = turquoise, fontSize = 13.sp)
+                            }
                             if (questionKind.isBlank() && !busy) {
                                 MainButton(
                                     if (italian) "RIPROVA LA DOMANDA" else "RETRY AI QUESTION"
@@ -487,10 +534,21 @@ fun RealQuizApp() {
                                     }, currentQuestion
                                 )
                                 if (questionKind == "guess") {
-                                    MainButton(if (italian) "SÌ, HA INDOVINATO" else "YES, AI GOT IT",
-                                        enabled = !busy) { finish(false) }
-                                    PlainButton(if (italian) "NO, NON HA INDOVINATO" else "NO, AI WAS WRONG",
-                                        enabled = !busy) { finish(true) }
+                                    Text(
+                                        if (italian)
+                                            "È la risposta corretta? Un No consuma una domanda; l'AI continua se ne restano."
+                                        else
+                                            "Is this correct? No spends one turn; the AI keeps playing if turns remain.",
+                                        color = dim, fontSize = 13.sp, lineHeight = 18.sp
+                                    )
+                                    MainButton(
+                                        if (italian) "SÌ" else "YES",
+                                        enabled = !busy
+                                    ) { resolveAiGuess(true) }
+                                    PlainButton(
+                                        if (italian) "NO" else "NO",
+                                        enabled = !busy
+                                    ) { resolveAiGuess(false) }
                                 } else if (!busy) {
                                     Text(if (italian) "RISPONDI" else "YOUR ANSWER",
                                         color = dim, fontSize = 12.sp, letterSpacing = 1.3.sp)
@@ -588,7 +646,7 @@ fun RealQuizApp() {
                                                 selectedModel, turnState(), secret, guess,
                                                 activeEffort
                                             )
-                                            finish(correct)
+                                            resolveHumanGuess(correct, guess)
                                         } catch (e: Exception) {
                                             reportGameError(e)
                                         } finally { busy = false }
