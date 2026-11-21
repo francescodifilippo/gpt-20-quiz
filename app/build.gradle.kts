@@ -3,6 +3,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// A persistent, private keystore is injected only on trusted CI runs.
+// Never put the signing key or passwords into the public repository.
+val betaKeystorePath = System.getenv("GPT20_SIGNING_STORE_FILE")
+val betaStorePassword = System.getenv("GPT20_SIGNING_STORE_PASSWORD")
+val betaKeyAlias = System.getenv("GPT20_SIGNING_KEY_ALIAS")
+val betaKeyPassword = System.getenv("GPT20_SIGNING_KEY_PASSWORD")
+val stableBetaSigning = listOf(
+    betaKeystorePath, betaStorePassword, betaKeyAlias, betaKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.francescodifilippo.gpt20quiz"
     compileSdk {
@@ -11,12 +21,31 @@ android {
         }
     }
 
+    signingConfigs {
+        if (stableBetaSigning) {
+            create("stableBeta") {
+                storeFile = file(betaKeystorePath!!)
+                storePassword = betaStorePassword!!
+                keyAlias = betaKeyAlias!!
+                keyPassword = betaKeyPassword!!
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            if (stableBetaSigning) {
+                signingConfig = signingConfigs.getByName("stableBeta")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.francescodifilippo.gpt20quiz"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.2.2-siwc-ui-fixes"
+        versionCode = 5
+        versionName = "0.2.3-stable-signing"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
