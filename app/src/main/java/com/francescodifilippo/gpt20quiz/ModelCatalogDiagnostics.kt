@@ -6,7 +6,7 @@ package com.francescodifilippo.gpt20quiz
  * OAuth access/refresh tokens, authorization codes, HTTP request bodies and raw
  * provider messages must never appear in model-catalog diagnostics or logs.
  */
-enum class ModelCatalogStage { ACCESS_TOKEN, CONNECTION, HTTP, JSON_RESPONSE, MODEL_SELECTION }
+enum class ModelCatalogStage { ACCESS_TOKEN, CONNECTION, HTTP, JSON_RESPONSE, MODEL_SELECTION, TOO_LARGE }
 
 class ModelCatalogFailure(
     val stage: ModelCatalogStage,
@@ -48,6 +48,7 @@ object ModelCatalogDiagnostics {
                 (failure.httpStatus?.toString() ?: "UNKNOWN")
             ModelCatalogStage.JSON_RESPONSE -> "MODELS_BAD_RESPONSE"
             ModelCatalogStage.MODEL_SELECTION -> "MODELS_BAD_CATALOG"
+            ModelCatalogStage.TOO_LARGE -> "MODELS_TOO_LARGE"
         }
     }
 
@@ -104,14 +105,18 @@ object ModelCatalogDiagnostics {
             ModelCatalogStage.MODEL_SELECTION -> if (italian)
                 "Il catalogo non contiene l'elenco dei modelli nel formato SIWC atteso."
             else "The catalog does not contain the expected SIWC model list."
+            ModelCatalogStage.TOO_LARGE -> if (italian)
+                "Il catalogo supera il limite di sicurezza di 16 milioni di caratteri."
+            else "The model catalog exceeds the 16-million-character safety limit."
         }
         val fingerprint = if (failure.stage == ModelCatalogStage.JSON_RESPONSE ||
-            failure.stage == ModelCatalogStage.MODEL_SELECTION) {
+            failure.stage == ModelCatalogStage.MODEL_SELECTION ||
+            failure.stage == ModelCatalogStage.TOO_LARGE) {
             listOfNotNull(
                 failure.httpStatus?.let { "HTTP " + it },
                 failure.safeContentType?.let { "tipo " + it },
                 failure.safeBodyCategory?.let { "contenuto " + it },
-                failure.responseCharacters?.takeIf { it in 0..512001 }
+                failure.responseCharacters?.takeIf { it in 0..ModelCatalogStreamParser.MAX_CHARS + 1 }
                     ?.let { it.toString() + " caratteri" },
                 failure.safeRequestId?.let { "request-id " + it }
             ).joinToString(" · ").take(210)
