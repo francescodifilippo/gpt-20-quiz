@@ -106,7 +106,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
     private suspend fun completion(
         model: String,
         instructions: String,
-        state: JSONObject
+        state: JSONObject,
+        effort: ReasoningEffort
     ): JSONObject = withContext(Dispatchers.IO) {
         val request = JSONObject()
             .put("model", model)
@@ -117,6 +118,11 @@ class LiveGameService(private val auth: SiwcAuthManager) {
                 JSONObject().put("role", "user")
                     .put("content", state.toString())
             ))
+        // This is a user-selected request parameter, never a prompt hint.
+        // AUTO deliberately omits the field and lets the model choose.
+        effort.requestedApiValue()?.let {
+            request.put("reasoning", JSONObject().put("effort", it))
+        }
         val accessToken = auth.accessToken()
         val connection = (URL("https://api.openai.com/v1/responses").openConnection()
             as HttpURLConnection)
@@ -192,7 +198,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
     suspend fun nextAiQuestion(
         model: String,
         session: GameSessionState,
-        history: List<GameExchange>
+        history: List<GameExchange>,
+        effort: ReasoningEffort
     ): AiTurn {
         check(session.role == PlayerRole.RESPONDER)
         val instructions = """
@@ -215,7 +222,7 @@ class LiveGameService(private val auth: SiwcAuthManager) {
             .put("questionNumber", session.questionNumber)
             .put("questionsRemaining", session.questionsRemaining)
             .put("language", session.language.effectiveLanguageTag)
-        val result = completion(model, instructions, state)
+        val result = completion(model, instructions, state, effort)
         val kind = result.optString("kind")
         val text = result.optString("text").trim()
         check(kind == "question" || kind == "guess")
@@ -230,7 +237,9 @@ class LiveGameService(private val auth: SiwcAuthManager) {
      * The AI secretly picks an answer. It is held only in local app memory
      * and is sent back with the full history for consistent responses.
      */
-    suspend fun selectSecret(model: String, session: GameSessionState): String {
+    suspend fun selectSecret(
+        model: String, session: GameSessionState, effort: ReasoningEffort
+    ): String {
         check(session.role == PlayerRole.GUESSER)
         val instructions = """
             Choose one widely recognizable and specific secret for a Twenty
@@ -242,7 +251,7 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         """.trimIndent() + "\n\n" + GameLanguagePrompt.initialInstructions(session)
         val result = completion(model, instructions, JSONObject()
             .put("action", "choose_secret")
-            .put("language", session.language.effectiveLanguageTag))
+            .put("language", session.language.effectiveLanguageTag), effort)
         val secret = result.optString("secret").trim()
         check(secret.isNotBlank() && secret.length < 180)
         return secret
@@ -253,7 +262,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         session: GameSessionState,
         secret: String,
         history: List<GameExchange>,
-        question: String
+        question: String,
+        effort: ReasoningEffort
     ): String {
         check(session.role == PlayerRole.GUESSER)
         val instructions = """
@@ -273,7 +283,7 @@ class LiveGameService(private val auth: SiwcAuthManager) {
             .put("secret", secret)
             .put("history", previous)
             .put("question", question)
-            .put("language", session.language.effectiveLanguageTag))
+            .put("language", session.language.effectiveLanguageTag), effort)
         val answer = result.optString("answer")
         check(answer in setOf("yes", "no", "probably", "probably_not", "unknown")) {
             "Unexpected answer from the model"
@@ -285,7 +295,8 @@ class LiveGameService(private val auth: SiwcAuthManager) {
         model: String,
         session: GameSessionState,
         secret: String,
-        guess: String
+        guess: String,
+        effort: ReasoningEffort
     ): Boolean {
         check(session.role == PlayerRole.GUESSER)
         val instructions = """
@@ -296,7 +307,7 @@ class LiveGameService(private val auth: SiwcAuthManager) {
             or {"correct":false}. Do not reveal the secret.
         """.trimIndent() + "\n\n" + GameLanguagePrompt.initialInstructions(session)
         val result = completion(model, instructions, JSONObject()
-            .put("secret", secret).put("guess", guess))
+            .put("secret", secret).put("guess", guess), effort)
         check(result.has("correct") && result.get("correct") is Boolean)
         return result.getBoolean("correct")
     }
