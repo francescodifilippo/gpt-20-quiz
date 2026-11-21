@@ -145,7 +145,7 @@ fun RealQuizApp() {
                 modelList = emptyList()
                 selectedModel = ""
                 modelLoadState = "error"
-                modelLoadError = safeUserFacingError(e, italian)
+                modelLoadError = ModelCatalogDiagnostics.description(e, italian)
             } finally {
                 busy = false
             }
