@@ -2,6 +2,8 @@ package com.francescodifilippo.gpt20quiz
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,11 +50,13 @@ fun RealQuizApp() {
                 .getString("game_language_code", GameLanguages.AUTO)
         ).code)
     }
-    var showLanguages by remember { mutableStateOf(false) }
+    var showLanguages by rememberSaveable { mutableStateOf(false) }
     var role by remember { mutableStateOf(PlayerRole.RESPONDER) }
     var session by remember { mutableStateOf(auth.sessionOrNull()) }
     var modelList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var selectedModel by remember { mutableStateOf("") }
+    var modelLoadState by remember { mutableStateOf("idle") } // idle/loading/ready/empty/error
+    var modelLoadError by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     // Never persist an OAuth callback URL: it contains a one-use authorization code.
@@ -72,6 +76,16 @@ fun RealQuizApp() {
     var guessWins by remember { mutableIntStateOf(prefs.getInt("guesserWins", 0)) }
     var answerWins by remember { mutableIntStateOf(prefs.getInt("responderWins", 0)) }
     val history: SnapshotStateList<GameExchange> = remember { mutableStateListOf() }
+    val pageScrollState = rememberScrollState()
+
+    BackHandler(enabled = showLanguages && currentPage == GamePhase.HOME) {
+        showLanguages = false
+    }
+    LaunchedEffect(showLanguages, currentPage) {
+        // In particular, returning from the last language no longer leaves
+        // the user stranded at the bottom of the long scrolling list.
+        pageScrollState.scrollTo(0)
+    }
 
     fun turnState(): GameSessionState {
         require(remaining > 0)
@@ -104,21 +118,45 @@ fun RealQuizApp() {
     }
 
     fun loadModels() {
+        // The catalog is account-scoped; never fabricate models or use a
+        // hard-coded fallback model when the server reports none.
+        if (busy || modelLoadState == "loading") return
         scope.launch {
             busy = true
-            message = ""
+            modelLoadState = "loading"
+            modelLoadError = ""
             try {
-                modelList = ai.availableModels()
-                if (modelList.isEmpty()) {
-                    message = if (italian) "Nessun modello disponibile per questo account."
-                              else "No models available for this account."
-                } else if (selectedModel !in modelList.map { it.first }) {
-                    selectedModel = modelList.first().first
+                val discovered = ai.availableModels()
+                modelList = discovered
+                if (discovered.isEmpty()) {
+                    selectedModel = ""
+                    modelLoadState = "empty"
+                    modelLoadError = if (italian)
+                        "L'account non ha restituito modelli visibili. Puoi riprovare o controllare il permesso del piano."
+                    else "This account returned no visible models. Retry or check plan authorization."
+                } else {
+                    if (selectedModel !in discovered.map { it.first }) {
+                        selectedModel = discovered.first().first
+                    }
+                    modelLoadState = "ready"
                 }
                 session = auth.sessionOrNull()
             } catch (e: Exception) {
-                message = e.message ?: "Model catalog error"
-            } finally { busy = false }
+                modelList = emptyList()
+                selectedModel = ""
+                modelLoadState = "error"
+                modelLoadError = safeUserFacingError(e, italian)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    // Restore an already connected account without another browser login.
+    // On fresh sign-in the onSignIn callback triggers model discovery explicitly.
+    LaunchedEffect(session?.clientId, session?.canUsePlan) {
+        if (session?.canUsePlan == true && modelLoadState == "idle" && !busy) {
+            loadModels()
         }
     }
 
@@ -172,7 +210,7 @@ fun RealQuizApp() {
         Column(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(listOf(Color(0xFF1D1A3D), night, night))
-            ).systemBarsPadding().verticalScroll(rememberScrollState())
+            ).systemBarsPadding().verticalScroll(pageScrollState)
                 .padding(horizontal = 22.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
@@ -192,6 +230,13 @@ fun RealQuizApp() {
                 ) { Text(if (italian) "IT" else "EN") }
             }
             if (showLanguages && currentPage == GamePhase.HOME) {
+                OutlinedButton(
+                    onClick = { showLanguages = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(if (italian) "← TORNA ALLA PARTITA" else "← BACK TO GAME SETUP")
+                }
                 LanguagePicker(
                     italianUi = italian,
                     selectedCode = selectedGameLanguage,
@@ -200,6 +245,7 @@ fun RealQuizApp() {
                         selectedGameLanguage = GameLanguages.option(it).code
                         context.getSharedPreferences("demo_score", 0).edit()
                             .putString("game_language_code", selectedGameLanguage).apply()
+                        showLanguages = false
                     },
                     onBack = { showLanguages = false }
                 )
@@ -207,6 +253,9 @@ fun RealQuizApp() {
                 when (currentPage) {
                     GamePhase.HOME -> {
                         Hero(italian)
+                        if (message.isNotBlank()) {
+                            CompactStatus(message, italian)
+                        }
                         // Sign in is the only route to AI gameplay.
                         AccountCard(session, italian, busy,
                             onSignIn = {
@@ -228,9 +277,17 @@ fun RealQuizApp() {
                                         }
                                         modelList = emptyList()
                                         selectedModel = ""
+                                        modelLoadState = "idle"
+                                        modelLoadError = ""
                                     } catch (e: Exception) {
-                                        message = e.message ?: "Sign-in failed"
+                                        message = safeUserFacingError(e, italian)
                                     } finally { busy = false }
+                                    if (session?.canUsePlan == true) {
+                                        // Fetch the account catalog automatically.
+                                        // The app need not ask the player to press
+                                        // an unexplained extra button.
+                                        loadModels()
+                                    }
                                 }
                             },
                             onDisconnect = {
@@ -240,6 +297,8 @@ fun RealQuizApp() {
                                     session = null
                                     selectedModel = ""
                                     modelList = emptyList()
+                                    modelLoadState = "idle"
+                                    modelLoadError = ""
                                     message = if (revoked) {
                                         if (italian) "Account scollegato." else "Account disconnected."
                                     } else {
@@ -313,14 +372,18 @@ fun RealQuizApp() {
                             }
                         }
                         if (session?.canUsePlan == true) {
-                            if (modelList.isEmpty() && !busy) {
-                                MainButton(
-                                    if (italian) "CARICA I MODELLI DISPONIBILI"
-                                    else "LOAD AVAILABLE MODELS"
-                                ) { loadModels() }
-                            }
+                            ModelDiscoveryPanel(
+                                italian = italian,
+                                loadState = modelLoadState,
+                                errorMessage = modelLoadError,
+                                modelCount = modelList.size,
+                                busy = busy,
+                                onReload = { loadModels() }
+                            )
                             if (modelList.isNotEmpty()) {
-                                ModelSelector(modelList, selectedModel, italian) { selectedModel = it }
+                                ModelSelector(modelList, selectedModel, italian) {
+                                    selectedModel = it
+                                }
                             }
                         }
                         GameLanguageTile(italian, selectedGameLanguage, deviceLocale) {
@@ -332,10 +395,24 @@ fun RealQuizApp() {
                             guessScore, guessWins) { if (!busy) role = PlayerRole.GUESSER }
                         RoleTile(PlayerRole.RESPONDER, role == PlayerRole.RESPONDER, italian,
                             answerScore, answerWins) { if (!busy) role = PlayerRole.RESPONDER }
+                        val ready = GameStartReadiness.evaluate(
+                            isConnected = session != null,
+                            hasPlanPermission = session?.canUsePlan == true,
+                            loading = busy,
+                            selectedModel = selectedModel
+                        )
                         MainButton(
                             if (italian) "INIZIA NUOVA PARTITA" else "START NEW GAME",
-                            enabled = session?.canUsePlan == true && selectedModel.isNotBlank() && !busy
+                            enabled = ready == StartBlocker.READY
                         ) { startGame() }
+                        if (ready != StartBlocker.READY) {
+                            Text(
+                                GameStartReadiness.explanation(ready, italian),
+                                color = dim, fontSize = 13.sp, lineHeight = 18.sp,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                     GamePhase.PLAYING -> {
                         Countdown(remaining, role, italian)
@@ -495,13 +572,11 @@ fun RealQuizApp() {
                         color = dim, fontSize = 13.sp)
                 }
             }
-            if (message.isNotBlank()) {
-                Surface(shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF242038),
-                    border = BorderStroke(1.dp, outline)) {
-                    Text(message, Modifier.fillMaxWidth().padding(15.dp), color = bright,
-                        fontSize = 13.sp)
-                }
+            // Status appears near the header on Home, never below all 27
+            // language choices. Gameplay errors still appear near the turn UI.
+            if (message.isNotBlank() &&
+                currentPage != GamePhase.HOME && !showLanguages) {
+                CompactStatus(message, italian)
             }
             if (session?.canUsePlan == true) {
                 Text(if (italian) "Usi il tuo piano ChatGPT · Gestisci utilizzo"
@@ -586,4 +661,122 @@ private fun ModelSelector(
             }
         }
     }
+}
+
+@Composable
+private fun CompactStatus(text: String, italian: Boolean) {
+    val safe = safeVisibleStatus(text, italian)
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFF24273E),
+        border = BorderStroke(1.dp, outline),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            safe,
+            Modifier.padding(14.dp),
+            color = bright,
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        )
+    }
+}
+
+@Composable
+private fun ModelDiscoveryPanel(
+    italian: Boolean,
+    loadState: String,
+    errorMessage: String,
+    modelCount: Int,
+    busy: Boolean,
+    onReload: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = Color(0xFF202641),
+        border = BorderStroke(1.dp, turquoise.copy(alpha = .45f))
+    ) {
+        Column(
+            Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                if (italian) "MODELLI DISPONIBILI" else "AVAILABLE MODELS",
+                color = turquoise,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.1.sp
+            )
+            when (loadState) {
+                "loading" -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        Modifier.size(21.dp), color = turquoise, strokeWidth = 2.dp
+                    )
+                    Text(
+                        if (italian) "Sto interrogando il catalogo SIWC..."
+                        else "Checking your SIWC model catalog...",
+                        color = bright, fontSize = 13.sp
+                    )
+                }
+                "ready" -> Text(
+                    if (italian) "$modelCount modelli trovati. Seleziona il modello qui sotto."
+                    else "$modelCount models found. Choose one below.",
+                    color = bright, fontSize = 13.sp
+                )
+                "empty", "error" -> Text(
+                    errorMessage,
+                    color = Color(0xFFFFC5B9), fontSize = 13.sp, lineHeight = 18.sp
+                )
+                else -> Text(
+                    if (italian) "Carica il catalogo disponibile per il tuo piano ChatGPT."
+                    else "Load the models available for your ChatGPT plan.",
+                    color = dim, fontSize = 13.sp
+                )
+            }
+            if (loadState != "loading") {
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onReload,
+                    enabled = !busy,
+                    border = BorderStroke(1.dp, turquoise.copy(alpha = .55f)),
+                    shape = RoundedCornerShape(15.dp)
+                ) {
+                    Text(
+                        if (italian) {
+                            if (loadState == "idle") "CARICA MODELLI" else "AGGIORNA MODELLI"
+                        } else {
+                            if (loadState == "idle") "LOAD MODELS" else "REFRESH MODELS"
+                        },
+                        color = turquoise
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun safeUserFacingError(error: Exception, italian: Boolean): String {
+    val message = error.message?.trim().orEmpty()
+    val benign = message.length in 1..160 &&
+        !message.contains('{') && !message.contains('}') &&
+        !message.contains("Bearer", ignoreCase = true) &&
+        !message.contains("instructions", ignoreCase = true) &&
+        !message.contains("access_token", ignoreCase = true) &&
+        !message.contains("code=", ignoreCase = true) &&
+        !message.contains('\n') &&
+        !message.contains("http://") && !message.contains("https://")
+    return if (benign) message else {
+        if (italian) "Operazione non riuscita. Riprova o verifica la connessione."
+        else "Operation failed. Please retry or check your connection."
+    }
+}
+
+private fun safeVisibleStatus(text: String, italian: Boolean): String {
+    // Never show raw JSON, complete model prompts, OAuth codes or large
+    // backend messages in the app's user-facing status area.
+    return safeUserFacingError(IllegalStateException(text), italian)
 }
