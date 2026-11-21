@@ -15,8 +15,8 @@ android {
         applicationId = "com.francescodifilippo.gpt20quiz"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.2.1-siwc-callback"
+        versionCode = 4
+        versionName = "0.2.2-siwc-ui-fixes"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
