@@ -31,6 +31,30 @@ prompt, to avoid steering the model toward them. The Stokke-chair incident
 is recorded as a regression scenario in the older v2 documentation and
 tests, **not** as a hint in new games.
 
+## Early guesses and incorrect guesses (revision 0.2.10)
+
+A proposed answer is a **guess**, even if written as a yes/no question.
+The responder confirms it with **Sì/No**. The guess counts as one
+of the 20 allowed actions:
+
+- **Sì / Yes:** identity confirmed, the match ends immediately.
+- **No before turn 20:** record the rejected identity as
+  `{"kind":"guess","question":"...","answer":"no"}` in the next
+  game-history input; decrement the counter by **one** and continue.
+  The AI must not repeat that excluded identity.
+- **No on turn 20:** the turn limit has been exhausted, the guesser loses.
+- The exact same rules apply when the human is the guesser.
+
+This is the selected classical house rule for GPT 20 Quiz, not a
+universal requirement for every Twenty Questions variant. Some
+implementations allow one definitive guess only; the default here
+supports repeated early guesses within the shared 20-turn budget.
+
+**Implementation:** `GameRules.resolveGuess`, `RealQuizApp` and
+`LiveGameService.GameExchange(kind="guess")`.
+Regression tests cover correct early guesses, wrong early guesses,
+wrong 20th guesses, and the full 20-turn budget.
+
 ## Language as a single directive
 
 The app resolves the language preference once per match. For `auto`,
