@@ -4,6 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,7 +45,7 @@ fun RealQuizApp() {
     val auth = remember { SiwcAuthManager(context) }
     val ai = remember { LiveGameService(auth) }
     val scope = rememberCoroutineScope()
-    var uiLanguage by remember { mutableStateOf(if (deviceLocale.startsWith("it")) "it" else "en") }
+    var uiLanguage by rememberSaveable { mutableStateOf(if (deviceLocale.startsWith("it")) "it" else "en") }
     val italian = uiLanguage == "it"
     var selectedGameLanguage by remember {
         mutableStateOf(GameLanguages.option(
@@ -51,16 +54,26 @@ fun RealQuizApp() {
         ).code)
     }
     var showLanguages by rememberSaveable { mutableStateOf(false) }
-    var role by remember { mutableStateOf(PlayerRole.RESPONDER) }
+    var role by rememberSaveable(
+        stateSaver = Saver<PlayerRole, String>(
+            save = { it.name },
+            restore = { PlayerRole.valueOf(it) }
+        )
+    ) { mutableStateOf(PlayerRole.RESPONDER) }
     var session by remember { mutableStateOf(auth.sessionOrNull()) }
     var modelList by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var selectedModel by remember { mutableStateOf("") }
+    var selectedModel by rememberSaveable { mutableStateOf("") }
     var selectedEffort by remember {
         mutableStateOf(ReasoningEffort.fromPreference(prefs.getString("reasoning_effort", "auto")))
     }
     // Match-level snapshot: changing model or home preferences cannot alter
     // the reasoning effort during an ongoing game.
-    var activeEffort by remember { mutableStateOf(ReasoningEffort.AUTO) }
+    var activeEffort by rememberSaveable(
+        stateSaver = Saver<ReasoningEffort, String>(
+            save = { it.apiValue },
+            restore = { ReasoningEffort.fromPreference(it) }
+        )
+    ) { mutableStateOf(ReasoningEffort.AUTO) }
     var modelLoadState by remember { mutableStateOf("idle") } // idle/loading/ready/empty/error
     var modelLoadError by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -68,21 +81,43 @@ fun RealQuizApp() {
     var effortNeedsRevision by remember { mutableStateOf(false) }
     // Never persist an OAuth callback URL: it contains a one-use authorization code.
     var manualCallbackUrl by remember { mutableStateOf("") }
-    var currentPage by remember { mutableStateOf(GamePhase.HOME) }
-    var activeLanguage by remember { mutableStateOf(GameLanguages.resolve("auto", deviceLocale)) }
-    var remaining by remember { mutableIntStateOf(20) }
-    var currentQuestion by remember { mutableStateOf("") }
-    var questionKind by remember { mutableStateOf("") }
-    var secret by remember { mutableStateOf("") }
-    var input by remember { mutableStateOf("") }
-    var lastAnswer by remember { mutableStateOf("") }
-    var gameWon by remember { mutableStateOf(false) }
-    var awarded by remember { mutableIntStateOf(0) }
+    var currentPage by rememberSaveable(
+        stateSaver = Saver<GamePhase, String>(
+            save = { it.name },
+            restore = { GamePhase.valueOf(it) }
+        )
+    ) { mutableStateOf(GamePhase.HOME) }
+    var activeLanguage by rememberSaveable(
+        stateSaver = listSaver<GameLanguageSelection, String>(
+            save = { listOf(it.preferenceCode, it.effectiveLanguageTag, it.effectiveLanguageName) },
+            restore = { GameLanguageSelection(it[0], it[1], it[2]) }
+        )
+    ) { mutableStateOf(GameLanguages.resolve("auto", deviceLocale)) }
+    var remaining by rememberSaveable { mutableIntStateOf(20) }
+    var currentQuestion by rememberSaveable { mutableStateOf("") }
+    var questionKind by rememberSaveable { mutableStateOf("") }
+    var secret by rememberSaveable { mutableStateOf("") }
+    var input by rememberSaveable { mutableStateOf("") }
+    var lastAnswer by rememberSaveable { mutableStateOf("") }
+    var gameWon by rememberSaveable { mutableStateOf(false) }
+    var awarded by rememberSaveable { mutableIntStateOf(0) }
     var guessScore by remember { mutableIntStateOf(prefs.getInt("guesser", 0)) }
     var answerScore by remember { mutableIntStateOf(prefs.getInt("responder", 0)) }
     var guessWins by remember { mutableIntStateOf(prefs.getInt("guesserWins", 0)) }
     var answerWins by remember { mutableIntStateOf(prefs.getInt("responderWins", 0)) }
-    val history: SnapshotStateList<GameExchange> = remember { mutableStateListOf() }
+    // Restore the 20-turn history after Activity recreation.
+    val history: SnapshotStateList<GameExchange> = rememberSaveable(
+        saver = listSaver<SnapshotStateList<GameExchange>, String>(
+            save = { entries ->
+                entries.flatMap { entry -> listOf(entry.question, entry.answer, entry.kind) }
+            },
+            restore = { saved ->
+                saved.chunked(3).filter { it.size == 3 }
+                    .map { GameExchange(it[0], it[1], it[2]) }
+                    .toMutableStateList()
+            }
+        )
+    ) { mutableStateListOf() }
     val pageScrollState = rememberScrollState()
 
     BackHandler(enabled = showLanguages && currentPage == GamePhase.HOME) {
@@ -142,7 +177,8 @@ fun RealQuizApp() {
                         "L'account non ha restituito modelli visibili. Puoi riprovare o controllare il permesso del piano."
                     else "This account returned no visible models. Retry or check plan authorization."
                 } else {
-                    if (selectedModel !in discovered.map { it.first }) {
+                    if (selectedModel !in discovered.map { it.first } &&
+                        currentPage != GamePhase.PLAYING) {
                         selectedModel = discovered.first().first
                     }
                     modelLoadState = "ready"
