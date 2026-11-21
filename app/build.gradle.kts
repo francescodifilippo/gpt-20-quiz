@@ -44,7 +44,11 @@ android {
         applicationId = "com.francescodifilippo.gpt20quiz"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
+        // CI run numbers increase monotonically within the workflow.
+        // Local developer builds use the published base version code.
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+            ?.takeIf { it > 0 && it < 1_000_000 }
+            ?.let { 10000 + it }) ?: 5
         versionName = "0.2.3-stable-signing"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
