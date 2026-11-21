@@ -40,7 +40,7 @@ private val line = Color(0xFF4C4C70)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { QuizApp() }
+        setContent { RealQuizApp() }
     }
 }
 
@@ -278,7 +278,7 @@ private fun QuizApp() {
 }
 
 @Composable
-private fun AppHeader(it: Boolean, onLanguage: () -> Unit, onHome: () -> Unit) {
+internal fun AppHeader(it: Boolean, onLanguage: () -> Unit, onHome: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.clickable(onClick = onHome), verticalAlignment = Alignment.CenterVertically) {
@@ -311,7 +311,7 @@ private fun AppHeader(it: Boolean, onLanguage: () -> Unit, onHome: () -> Unit) {
 }
 
 @Composable
-private fun Hero(it: Boolean) {
+internal fun Hero(it: Boolean) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp))
         .background(Brush.linearGradient(listOf(Color(0xFF302554), Color(0xFF153046))))
         .border(1.dp, line, RoundedCornerShape(30.dp))
@@ -330,7 +330,7 @@ private fun Hero(it: Boolean) {
 }
 
 @Composable
-private fun RoleTile(role: PlayerRole, selected: Boolean, it: Boolean,
+internal fun RoleTile(role: PlayerRole, selected: Boolean, it: Boolean,
     points: Int, wins: Int, onClick: () -> Unit) {
     val accent = if (role == PlayerRole.GUESSER) violet else cyan
     val title = if (role == PlayerRole.GUESSER) {
@@ -370,7 +370,7 @@ private fun RoleTile(role: PlayerRole, selected: Boolean, it: Boolean,
 }
 
 @Composable
-private fun Countdown(remaining: Int, role: PlayerRole, it: Boolean) {
+internal fun Countdown(remaining: Int, role: PlayerRole, it: Boolean) {
     val current = 21 - remaining
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(if (role == PlayerRole.GUESSER) {
@@ -408,7 +408,7 @@ private fun Countdown(remaining: Int, role: PlayerRole, it: Boolean) {
 }
 
 @Composable
-private fun QuestionBox(kicker: String, question: String) {
+internal fun QuestionBox(kicker: String, question: String) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
         .background(Brush.linearGradient(listOf(Color(0xFF1C203C), Color(0xFF172A3C))))
         .border(1.dp, line, RoundedCornerShape(28.dp))
@@ -421,7 +421,7 @@ private fun QuestionBox(kicker: String, question: String) {
 }
 
 @Composable
-private fun AnswerTile(answer: String, highlight: Boolean, onClick: () -> Unit) {
+internal fun AnswerTile(answer: String, highlight: Boolean, onClick: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(17.dp),
         color = if (highlight) violet.copy(alpha = .2f) else white.copy(alpha = .07f),
@@ -432,7 +432,7 @@ private fun AnswerTile(answer: String, highlight: Boolean, onClick: () -> Unit) 
 }
 
 @Composable
-private fun ResultPanel(it: Boolean, role: PlayerRole, won: Boolean, award: Int, total: Int) {
+internal fun ResultPanel(it: Boolean, role: PlayerRole, won: Boolean, award: Int, total: Int) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp))
         .background(Brush.linearGradient(listOf(Color(0xFF312550), Color(0xFF163448))))
         .border(1.dp, line, RoundedCornerShape(30.dp)).padding(28.dp),
@@ -460,7 +460,7 @@ private fun ResultPanel(it: Boolean, role: PlayerRole, won: Boolean, award: Int,
 }
 
 @Composable
-private fun MainButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun MainButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     Button(onClick = onClick, enabled = enabled,
         modifier = Modifier.fillMaxWidth().height(60.dp),
         shape = RoundedCornerShape(19.dp),
@@ -473,7 +473,7 @@ private fun MainButton(text: String, enabled: Boolean = true, onClick: () -> Uni
 }
 
 @Composable
-private fun PlainButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun PlainButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     OutlinedButton(onClick = onClick, enabled = enabled,
         modifier = Modifier.fillMaxWidth().height(55.dp),
         shape = RoundedCornerShape(19.dp), border = BorderStroke(1.dp, line),
