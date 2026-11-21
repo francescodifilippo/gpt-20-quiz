@@ -4,7 +4,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: SIWC-enabled Android beta (0.2.6).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
+> **Status: SIWC-enabled Android beta (0.2.7).** Browser-based SIWC authorization and live Responses API calls are implemented in Kotlin. CI compiles the app and runs unit tests, but SIWC sign-in has been reported working on a physical Android device, but model discovery and real inference still need on-device verification. Do not treat this as a production-ready release.
 
 ## Concept
 
@@ -40,6 +40,40 @@ The real application launches [RealQuizApp.kt](app/src/main/java/com/francescodi
 **Not yet verified:** Android browser loopback callback/return, real SIWC consent and use of ChatGPT plan, actual inference on the selected account, refresh/revocation, and behavior across process death. The beta currently supports one active ChatGPT account. These require physical-device integration testing before any Google Play release. See [Android SIWC test plan](docs/SIWC_ANDROID_TEST.md).
 
 **Important:** The former [v1 prompt](prompts/twenty_questions_v1.md) is design documentation. Role-specific live prompts are currently implemented in `LiveGameService.kt`; versioning and further validation remain open tasks.
+
+## Beta 0.2.7 — model-independent effort and early object-category guessing
+
+A real gameplay test with the chosen SIWC model, GPT-5.6 Luna, showed
+that the AI attempted to distinguish construction details of a chair
+instead of making the more useful early guess "Is it a chair?".
+The user's actual target was a **Stokke chair**.
+
+The game now follows a versioned **category-first** Twenty Questions
+strategy. A normal everyday object identity is an acceptable final
+guess, even when the secret is a branded version of it. "Chair" is
+an acceptable answer for a Stokke chair; "furniture" is too generic.
+The AI must identify the category as soon as the history reasonably
+supports it, and use a FINAL GUESS action rather than asking about
+pedestals, product models or other secondary details.
+The 20th turn remains a mandatory final guess, and guessing earlier
+is encouraged.
+
+The player may select **reasoning effort independently from the model**:
+Automatic, None, Minimal, Low, Medium, High, Extra high, Maximum.
+The preference is persisted and kept when the model selection changes.
+The value is frozen for the current match and sent in every Responses
+request as the actual reasoning.effort parameter, except for Automatic
+which omits the API field. Models may have different supported values;
+unsupported settings produce an explicit server error without the app
+silently downgrading effort.
+
+- Gameplay rules: [TwentyQuestionsStrategy.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/TwentyQuestionsStrategy.kt)
+- Versioned strategy: [prompts/twenty_questions_v2.md](prompts/twenty_questions_v2.md)
+- Effort policy: [ReasoningEffort.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/ReasoningEffort.kt)
+- UI selector: [ReasoningEffortSelector.kt](app/src/main/java/com/francescodifilippo/gpt20quiz/ReasoningEffortSelector.kt)
+
+The strategy is tested for consistency in JVM unit tests; **the actual
+deduction quality of a model can only be established by playing new games**.
 
 ## Beta 0.2.6 — streaming model catalog (512K response truncation fix)
 
