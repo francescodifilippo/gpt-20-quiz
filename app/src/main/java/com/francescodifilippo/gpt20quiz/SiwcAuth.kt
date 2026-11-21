@@ -91,7 +91,7 @@ private fun httpJson(url: String, method: String = "GET", body: String? = null,
             }.getOrDefault("HTTP " + status)
             throw IllegalStateException("OpenAI request failed (" + status + "): " + detail)
         }
-        return JSONObject(text)
+        return if (text.isBlank()) JSONObject() else JSONObject(text)
     } finally { connection.disconnect() }
 }
 
@@ -196,7 +196,7 @@ class SiwcAuthManager(context: Context) {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             server.soTimeout = 180_000
             val redirect = "http://127.0.0.1:" + server.localPort + SiwcEndpoints.callbackPath
-            val clientId = if (initial) "dynamic_agent_client" else previous.clientId
+            val clientId = if (initial) "dynamic_agent_client" else previous!!.clientId
             val url = Uri.parse(SiwcEndpoints.authorize).buildUpon()
                 .appendQueryParameter("client_id", clientId)
                 .appendQueryParameter("response_type", "code")
@@ -211,7 +211,7 @@ class SiwcAuthManager(context: Context) {
                 .appendQueryParameter("code_challenge", challenge)
                 .apply {
                     if (initial) appendQueryParameter("agent_name_hint", "GPT 20 Quiz")
-                    else if (previous.idToken.isNotBlank())
+                    else if (previous!!.idToken.isNotBlank())
                         appendQueryParameter("id_token_hint", previous.idToken)
                 }.build()
             val intent = Intent(Intent.ACTION_VIEW, url)
@@ -229,10 +229,14 @@ class SiwcAuthManager(context: Context) {
                 val path = first[1]
                 require(path.substringBefore('?') == SiwcEndpoints.callbackPath)
                 var hostHeader = ""
-                repeat(64) {
-                    val header = reader.readLine() ?: ""
-                    if (header.isBlank()) return@repeat
-                    if (header.startsWith("Host:", ignoreCase = true)) hostHeader = header.substringAfter(':').trim()
+                var headerCount = 0
+                while (true) {
+                    val header = reader.readLine() ?: break
+                    if (header.isBlank()) break
+                    headerCount++
+                    require(headerCount <= 64 && header.length < 8192)
+                    if (header.startsWith("Host:", ignoreCase = true))
+                        hostHeader = header.substringAfter(':').trim()
                 }
                 require(hostHeader == "127.0.0.1:" + server.localPort)
                 val query = Uri.parse("http://127.0.0.1" + path)
@@ -255,14 +259,15 @@ class SiwcAuthManager(context: Context) {
                 socket.getOutputStream().flush()
                 check(validState) { "OAuth state does not match" }
                 if (error != null) throw IllegalStateException("Sign-in denied: " + error.take(60))
-                val code = query.getQueryParameter("code") ?: error("Missing authorization code")
+                val code = query.getQueryParameter("code")
+                    ?: throw IllegalStateException("Missing authorization code")
                 val issued = query.getQueryParameter("client_id")
                 val registrationId = if (initial) {
                     require(!issued.isNullOrBlank() && issued != "dynamic_agent_client")
                     issued
                 } else {
-                    if (issued != null) require(issued == previous.clientId)
-                    previous.clientId
+                    if (issued != null) require(issued == previous!!.clientId)
+                    previous!!.clientId
                 }
                 Pair(code, registrationId)
             }
