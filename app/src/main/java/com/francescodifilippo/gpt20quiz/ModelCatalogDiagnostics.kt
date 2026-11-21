@@ -12,12 +12,28 @@ class ModelCatalogFailure(
     val stage: ModelCatalogStage,
     val httpStatus: Int? = null,
     providerErrorCode: String? = null,
+    val contentTypeCategory: String? = null,
+    val bodyCategory: String? = null,
+    val responseCharacters: Int? = null,
+    val requestId: String? = null,
     cause: Throwable? = null
 ) : RuntimeException("SIWC catalog failed at " + stage.name, cause) {
     val safeProviderCode = providerErrorCode
         ?.takeIf { it.length in 1..64 && it.all { c ->
             c.isLetterOrDigit() || c == '_' || c == '-' || c == '.'
         } }
+    val safeRequestId = requestId?.takeIf {
+        it.length in 1..90 && it.all { c ->
+            c.isLetterOrDigit() || c in "-_."
+        }
+    }
+    val safeContentType = contentTypeCategory?.takeIf {
+        it in setOf("json", "html", "text", "event-stream", "binary", "unknown", "missing")
+    }
+    val safeBodyCategory = bodyCategory?.takeIf {
+        it in setOf("empty", "json-object", "json-array", "json-primitive",
+            "html", "xml", "event-stream", "binary", "unknown")
+    }
 }
 
 /** Short actionable text and a stable identifier that may be reported to developers. */
@@ -89,6 +105,19 @@ object ModelCatalogDiagnostics {
                 "Il catalogo non contiene l'elenco dei modelli nel formato SIWC atteso."
             else "The catalog does not contain the expected SIWC model list."
         }
-        return prefix + hint + provider + " [" + identifier(failure) + "]"
+        val fingerprint = if (failure.stage == ModelCatalogStage.JSON_RESPONSE ||
+            failure.stage == ModelCatalogStage.MODEL_SELECTION) {
+            listOfNotNull(
+                failure.httpStatus?.let { "HTTP " + it },
+                failure.safeContentType?.let { "tipo " + it },
+                failure.safeBodyCategory?.let { "contenuto " + it },
+                failure.responseCharacters?.takeIf { it in 0..512001 }
+                    ?.let { it.toString() + " caratteri" },
+                failure.safeRequestId?.let { "request-id " + it }
+            ).joinToString(" · ").take(210)
+        } else ""
+        return prefix + hint + provider +
+            (if (fingerprint.isBlank()) "" else "\n" + fingerprint) +
+            " [" + identifier(failure) + "]"
     }
 }
