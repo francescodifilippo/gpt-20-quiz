@@ -2,6 +2,12 @@
 
 **Status:** beta implementation only; real SIWC authorization/inference must be tested by a human on an Android device. A successful build does not verify OAuth.
 
+## Confirmed 2026-11-21 on-device observation
+
+The first SIWC authorization completed successfully on a physical Android phone using the callback improvements in beta 0.2.1. The browser did not close automatically, which is acceptable for the current beta. Next integration blockers reported: the **Load models** button appeared to do nothing, **Start new game** remained disabled, and a very long diagnostic output appeared at the bottom of the language-selection screen.
+
+Beta **0.2.2** addresses the user-interface side of these reports: auto-discover account models after connection, show the model request state/short errors beside the selector, never show raw server responses or full prompt text in the UI, explain start prerequisites, and add direct language picker exit with Android Back handling. The actual model request with the signed-in account still needs on-device verification.
+
 ## Prerequisites
 
 - Use the newest CI artifact **gpt-20-quiz-siwc-beta-debug**; do not reuse the older **gpt-20-quiz-demo-debug** APK.
