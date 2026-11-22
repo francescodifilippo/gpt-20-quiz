@@ -6,6 +6,20 @@
 
 > **Status: SIWC-enabled Android beta (0.2.10).** Android browser sign-in, account-scoped model selection and real gameplay have been observed on a physical device. Kotlin compilation and JVM tests run in GitHub Actions. Game quality, model compatibility and broader Android coverage remain experimental; this is not a production release.
 
+## GitHub repository About
+
+The proposed public repository description and discoverability topics are
+defined in [`scripts/configure-repository-about.sh`](scripts/configure-repository-about.sh).
+A repository administrator can apply them with an authenticated
+[GitHub CLI](https://cli.github.com/) session:
+
+```bash
+bash scripts/configure-repository-about.sh
+```
+
+This updates the GitHub **About** description and adds repository **Topics**.
+The file itself does not automatically change GitHub repository settings.
+
 ## Concept
 
 Think of a person, animal, object, place, or concept. An AI game host tries to guess it by asking up to 20 questions. Respond with **Yes / No / Probably / Probably not / Don't know**. Each question should reduce uncertainty using the full answer history. The app uses the device's preferred language, supports language selection, and delegates game text to the model for languages without a bundled translation.
