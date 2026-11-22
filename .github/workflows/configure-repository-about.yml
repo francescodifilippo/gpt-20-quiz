@@ -1,11 +1,9 @@
 name: Configure GitHub repository About
 
+# Owner-run only. The token with Administration: write is intentionally
+# not made available to automatically triggered builds.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/configure-repository-about.yml
 
 permissions:
   contents: read
@@ -24,19 +22,20 @@ jobs:
       - name: Update description and topics
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GPT20_REPO_ADMIN_TOKEN || github.token }}
-          ADMIN_TOKEN_CONFIGURED: ${{ secrets.GPT20_REPO_ADMIN_TOKEN != '' }}
+          GH_TOKEN: ${{ secrets.GPT20_REPO_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ "$ADMIN_TOKEN_CONFIGURED" != "true" ]]; then
-            echo "::notice::Repository administration secret not configured. Attempting with the workflow token."
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::Missing GPT20_REPO_ADMIN_TOKEN. Create a fine-grained PAT scoped to this repository with Administration: write and save it as an Actions repository secret."
+            echo "::error::The default GITHUB_TOKEN failed with HTTP 403 on the first run; it cannot update repository About."
+            exit 1
           fi
           bash scripts/configure-repository-about.sh
 
       - name: Verify public About metadata
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GPT20_REPO_ADMIN_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.GPT20_REPO_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}" --jq '{description: .description, topics: .topics}'
