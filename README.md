@@ -6,33 +6,6 @@
 
 > **Status: SIWC-enabled Android beta (0.2.10).** Android browser sign-in, account-scoped model selection and real gameplay have been observed on a physical device. Kotlin compilation and JVM tests run in GitHub Actions. Game quality, model compatibility and broader Android coverage remain experimental; this is not a production release.
 
-## GitHub repository About
-
-The GitHub **About** description and 12 discovery topics are defined in
-[`scripts/configure-repository-about.sh`](scripts/configure-repository-about.sh).
-
-A [manual GitHub Action](.github/workflows/configure-repository-about.yml)
-runs the script and verifies GitHub's public metadata. Its first run
-([logs](https://github.com/francescodifilippo/gpt-20-quiz/actions/runs/45031162172))
-returned **HTTP 403** because GitHub's automatic Actions token cannot
-change repository administration metadata.
-
-**One-time repository-owner setup:** create a fine-grained GitHub personal
-access token restricted to `francescodifilippo/gpt-20-quiz` with the
-`Administration: write` repository permission and a short expiration.
-Add it at **Settings → Secrets and variables → Actions** with name
-`GPT20_REPO_ADMIN_TOKEN` (never commit or share it). Then open
-**Actions → Configure GitHub repository About → Run workflow**, branch
-`main`. The workflow is intentionally manual-only because it handles
-an administrator token.
-
-After the metadata update is verified, delete the temporary secret and
-revoke its token unless you intend to run the Action again. Alternatively,
-execute the script from a local authenticated `gh` CLI session:
-
-```bash
-bash scripts/configure-repository-about.sh
-```
 
 ## Concept
 
