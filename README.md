@@ -11,21 +11,6 @@
 
 Think of a person, animal, object, place, or concept. An AI game host tries to guess it by asking up to 20 questions. Respond with **Yes / No / Probably / Probably not / Don't know**. Each question should reduce uncertainty using the full answer history. The app uses the device's preferred language, supports language selection, and delegates game text to the model for languages without a bundled translation.
 
-## Installations and in-place updates
-
-**The APK's filename does not control Android upgrades.** Android verifies the package ID, signing certificate, and an increasing versionCode. Earlier CI runs generated a different debug signing key on each temporary runner, which made consecutive builds incompatible.
-
-The repository now supports **persistent, private beta signing** with GitHub Actions Secrets, and a fixed published filename **gpt-20-quiz.apk**. New APK artifacts are published **only when the stable signing key has been configured**. CI continues to run tests without secrets but will not publish a misleading non-upgradeable APK.
-
-To configure signing once from Linux/macOS/WSL, with JDK, openssl and authenticated GitHub CLI:
-
-~~~bash
-bash scripts/configure-beta-signing.sh
-~~~
-
-The script creates and securely stores a local signing key/password and uploads **four protected repository secrets** using your GitHub credentials. Back up the private signing files outside the repository. See the full guide: [Android stable signing and upgrades](docs/ANDROID_UPDATES_SIGNING.md).
-
-**One final uninstall may be required** when replacing APKs 0.2.0–0.2.2, which were signed with temporary CI certificates. Once the persistently signed beta is installed, future versions with the same signing key can update in place. CI versionCode is derived from the monotonically increasing GitHub Actions run number.
 
 ## SIWC live beta — entry point
 
